@@ -4,6 +4,20 @@
 
 A set of **original DeepSeek Harness (DSH) plugins** built around the "Xia, game-dev assistant" persona: a sakura skin with companion notifications, a tree-shaped knowledge base, a daily character roster, persistent memory, and a global proxy fix.
 
+## Why use it: an anime companion by your side while you make games
+
+The worst part of solo game dev isn't the bugs — it's the **loneliness**. That's what this suite is really about: turning your working session into an adventure with company.
+
+- 🎀 **A new anime heroine every day**: tsundere, genki, kuudere, soft… every day a random anime-style character joins your session with a full persona (personality, catchphrases, speech style, dev specialty) to code with you, break down requirements, and talk world-building. Want someone else? One command.
+- 📝 **She remembers you**: your projects, tasks, preferences, and past pitfalls live in persistent memory — no more "who are you again?".
+- 📚 **A home for your design docs**: the tree-shaped knowledge base organizes world-building, numbers, story, and character settings into a browsable tree; drag a node into the chat and the agent reads it on demand.
+- 🌸 **A workspace with atmosphere**: sakura theme, message read-aloud, approval/job/answer reminders — like having a partner at the desk next to you, nudging you when needed.
+- 🌐 **Network pain fixed too**: global-proxy keeps subscription models and overseas services reachable.
+
+**Cards are open**: the repo ships only one fictional original example card; anyone can write their own cards against the roster schema (personality, catchphrases, voice hints all supported) and build their own squad — who keeps you company is up to you.
+
+**Who it's for**: indie game developers working solo, long-form workflow users who want a lighter companion feel, and anime fans. Install, pick the "Xia" preset, and someone is there to work with you from day one.
+
 ## Plugins
 
 | Package | Layer | One-liner |
