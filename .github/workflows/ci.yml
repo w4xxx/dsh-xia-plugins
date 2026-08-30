@@ -36,6 +36,8 @@ jobs:
         run: git clone --depth 1 --branch dsh-v0.1.2-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git dsh
       - name: Overlay the five packages
         run: node xia/scripts/integrate.mjs --checkout $GITHUB_WORKSPACE/dsh
+      - name: Patch DSH build graph (tsconfig refs/paths + web-app deps)
+        run: node xia/scripts/patch-dsh.mjs --checkout $GITHUB_WORKSPACE/dsh
       - name: Install DSH workspace
         working-directory: dsh
         run: pnpm install --no-frozen-lockfile
