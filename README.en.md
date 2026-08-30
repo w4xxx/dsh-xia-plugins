@@ -14,7 +14,7 @@ The worst part of solo game dev isn't the bugs — it's the **loneliness**. That
 - 🌸 **A workspace with atmosphere**: sakura theme, message read-aloud, approval/job/answer reminders — like having a partner at the desk next to you, nudging you when needed.
 - 🌐 **Network pain fixed too**: global-proxy keeps subscription models and overseas services reachable.
 
-**Cards are open**: the repo ships two fictional original example cards (the assistant "Xia" and "Hoshimi Mio, Ultimate Art Lead"); anyone can write their own cards against the roster schema (personality, catchphrases, voice hints all supported) and build their own squad — who keeps you company is up to you.
+**Cards are open**: the repo ships five fictional original example cards — the assistant "Xia" plus the "Ultimate" studio squad (Hoshimi Mio, Art Lead; Hanabishi Tsumugi, Script Lead; Kujo Rei, Code Lead; Himuro Yuki, Numbers Lead); anyone can write their own cards against the roster schema (personality, catchphrases, voice hints all supported) and build their own squad — who keeps you company is up to you.
 
 **Who it's for**: indie game developers working solo, long-form workflow users who want a lighter companion feel, and anime fans. Install, pick the "Xia" preset, and someone is there to work with you from day one.
 
