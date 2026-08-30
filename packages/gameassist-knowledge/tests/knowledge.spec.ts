@@ -56,11 +56,11 @@ describe('parseKbPath', () => {
 })
 
 describe('resolveLibraryNode', () => {
-  const root = 'E:/kb'
+  const root = join(tmpdir(), 'kb')
 
   test('resolves a normal path inside the library', () => {
     expect(resolveLibraryNode(root, 'lib/剧情/第1章.md')).toEqual({
-      abs: join('E:', 'kb', 'lib', '剧情', '第1章.md'),
+      abs: join(root, 'lib', '剧情', '第1章.md'),
       library: 'lib',
       rel: '剧情/第1章.md',
     })
