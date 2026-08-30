@@ -79,7 +79,9 @@ function apply(file, marker, inserted, what) {
     return
   }
   const block = inserted.map((s) => s + (s.endsWith('\n') ? '' : '\n')).join('')
-  t = t.slice(0, idx) + block + t.slice(idx)
+  // Insert immediately AFTER the marker so the block lands inside the
+  // braces/array opened by it (e.g. inside `"paths": {` or `"references": [`).
+  t = t.slice(0, idx + marker.length) + '\n' + block + t.slice(idx + marker.length)
   writeFileSync(file, t, 'utf8')
   console.log(`patched: ${what}`)
 }
