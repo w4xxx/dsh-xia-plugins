@@ -1,0 +1,14 @@
+{
+  "name": "dsh-xia-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Original DSH plugins: Xia game-assistant suite (sakura skin, knowledge base, roster, memory, global proxy). Source overlay for DeepSeek Harness.",
+  "license": "MIT",
+  "scripts": {
+    "integrate": "node scripts/integrate.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@11.7.0"
+}

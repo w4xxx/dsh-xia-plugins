@@ -1,0 +1,10 @@
+node_modules/
+*.tsbuildinfo
+*.log
+.DS_Store
+.idea/
+.vscode/
+memory.json
+.memory/
+characters/
+!packages/gameassist-roster/cards/*.example.json

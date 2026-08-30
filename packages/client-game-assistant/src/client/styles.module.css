@@ -1,0 +1,161 @@
+/* Game-assistant companion skin styles (injected once, removed with the row). */
+
+.charm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  user-select: none;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
+  animation: gameassist-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes gameassist-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.6; }
+}
+
+.petalLayer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.petal {
+  position: absolute;
+  top: -24px;
+  width: 10px;
+  height: 14px;
+  border-radius: 60% 40% 60% 40%;
+  background: linear-gradient(135deg, rgba(224, 85, 143, 0.55), rgba(255, 122, 184, 0.35));
+  animation-name: gameassist-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes gameassist-fall {
+  0% { transform: translate3d(0, -24px, 0) rotate(0deg); }
+  50% { transform: translate3d(28px, 50vh, 0) rotate(180deg); }
+  100% { transform: translate3d(-14px, 105vh, 0) rotate(360deg); }
+}
+
+.notifyCharm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-state-warn-primary);
+  user-select: none;
+  animation: gameassist-notify-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes gameassist-notify-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.readAloud {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.readAloud:hover {
+  color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.readAloud[aria-pressed='true'] {
+  color: var(--dsw-alias-brand-primary);
+}
+
+.voicePage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 520px;
+}
+
+.voiceTitle {
+  margin: 0;
+  font-size: 15px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.voiceSection {
+  margin: 10px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-brand-primary);
+}
+
+.voiceRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voiceHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.voiceField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.voiceSelect {
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.voiceRange {
+  width: 100%;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.voiceTest {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-brand-primary);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot, .petal, .notifyCharm { animation: none; }
+}

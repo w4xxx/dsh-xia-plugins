@@ -1,0 +1,41 @@
+{
+  "name": "dsh-global-proxy",
+  "version": "0.1.0",
+  "description": "Route every host-process undici fetch through the local HTTP(S) proxy (default 127.0.0.1:7892), keeping localhost and China-reachable APIs direct.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "scripts": {
+    "bundle": "tsdown",
+    "check": "node --check lib/index.js && node --check lib/client.js",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w4xxx/dsh-xia-plugins.git",
+    "directory": "packages/global-proxy"
+  },
+  "peerDependencies": {
+    "undici": ">=6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "undici": "^7.0.0",
+    "vitest": "^4.1.8"
+  }
+}

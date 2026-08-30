@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  proxy:
+    name: global-proxy (standalone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/global-proxy/pnpm-lock.yaml
+      - run: corepack enable
+      - name: Install
+        working-directory: packages/global-proxy
+        run: pnpm install --no-frozen-lockfile
+      - name: Test
+        working-directory: packages/global-proxy
+        run: pnpm test
+
+  overlay:
+    name: DSH checkout overlay (5 host/client packages)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: xia
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - name: Clone official DSH at the pinned tag
+        run: git clone --depth 1 --branch dsh-v0.1.2-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git dsh
+      - name: Overlay the five packages
+        run: node xia/scripts/integrate.mjs --checkout $GITHUB_WORKSPACE/dsh
+      - name: Install DSH workspace
+        working-directory: dsh
+        run: pnpm install --no-frozen-lockfile
+      - name: Build host lib
+        working-directory: dsh
+        run: pnpm run build:lib:host
+      - name: Build client lib
+        working-directory: dsh
+        run: pnpm run build:lib:client
+      - name: Run focused tests
+        working-directory: dsh
+        run: pnpm exec vitest run packages/companion/gameassist-knowledge/tests packages/companion/gameassist-memory/tests packages/companion/gameassist-roster/tests packages/client/game-assistant/tests packages/client/gameassist-knowledge/tests
