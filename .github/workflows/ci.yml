@@ -13,8 +13,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: packages/global-proxy/pnpm-lock.yaml
       - run: corepack enable
       - name: Install
         working-directory: packages/global-proxy
