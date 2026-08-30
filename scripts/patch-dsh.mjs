@@ -9,7 +9,7 @@
  * wiring the checkout overlay needs:
  *   - tsconfig.host.json:  4 project references (packages/companion/gameassist-*)
  *   - tsconfig.client.json: 2 project references (packages/client/*)
- *   - tsconfig.base.json:  8 explicit path mappings for @dsh-xia/dsh-*
+ *   - tsconfig.base.json:  8 explicit path mappings for @w4xxx/dsh-*
  *   - web-app package.json: 6 workspace dependencies
  *
  * Usage: node scripts/patch-dsh.mjs --checkout <path> [--dry-run]
@@ -21,7 +21,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-const SCOPE = '@dsh-xia'
+const SCOPE = '@w4xxx'
 const HOST_REFS = [
   'gameassist-knowledge',
   'gameassist-memory',
@@ -31,20 +31,20 @@ const CLIENT_REFS = ['game-assistant', 'gameassist-knowledge'].map((n) => ({
   path: `./packages/client/${n}`,
 }))
 const BASE_PATHS = {
-  '@dsh-xia/dsh-gameassist-knowledge': ['./packages/companion/gameassist-knowledge/src/index.ts'],
-  '@dsh-xia/dsh-gameassist-memory': ['./packages/companion/gameassist-memory/src/index.ts'],
-  '@dsh-xia/dsh-gameassist-roster': ['./packages/companion/gameassist-roster/src/index.ts'],
-  '@dsh-xia/dsh-client-game-assistant': ['./packages/client/game-assistant/src/index.ts'],
-  '@dsh-xia/dsh-client-game-assistant/client': ['./packages/client/game-assistant/src/client/index.ts'],
-  '@dsh-xia/dsh-client-gameassist-knowledge': ['./packages/client/gameassist-knowledge/src/index.ts'],
-  '@dsh-xia/dsh-client-gameassist-knowledge/client': ['./packages/client/gameassist-knowledge/src/client/index.ts'],
+  '@w4xxx/dsh-gameassist-knowledge': ['./packages/companion/gameassist-knowledge/src/index.ts'],
+  '@w4xxx/dsh-gameassist-memory': ['./packages/companion/gameassist-memory/src/index.ts'],
+  '@w4xxx/dsh-gameassist-roster': ['./packages/companion/gameassist-roster/src/index.ts'],
+  '@w4xxx/dsh-client-game-assistant': ['./packages/client/game-assistant/src/index.ts'],
+  '@w4xxx/dsh-client-game-assistant/client': ['./packages/client/game-assistant/src/client/index.ts'],
+  '@w4xxx/dsh-client-gameassist-knowledge': ['./packages/client/gameassist-knowledge/src/index.ts'],
+  '@w4xxx/dsh-client-gameassist-knowledge/client': ['./packages/client/gameassist-knowledge/src/client/index.ts'],
 }
 const WEB_DEPS = [
-  '@dsh-xia/dsh-client-game-assistant',
-  '@dsh-xia/dsh-client-gameassist-knowledge',
-  '@dsh-xia/dsh-gameassist-knowledge',
-  '@dsh-xia/dsh-gameassist-memory',
-  '@dsh-xia/dsh-gameassist-roster',
+  '@w4xxx/dsh-client-game-assistant',
+  '@w4xxx/dsh-client-gameassist-knowledge',
+  '@w4xxx/dsh-gameassist-knowledge',
+  '@w4xxx/dsh-gameassist-memory',
+  '@w4xxx/dsh-gameassist-roster',
 ]
 
 function parseArgs(argv) {
@@ -120,7 +120,7 @@ apply(
   Object.entries(BASE_PATHS).map(
     ([k, v]) => `      ${JSON.stringify(k)}: ${JSON.stringify(v)},`,
   ),
-  'tsconfig.base.json paths (@dsh-xia ×7)',
+  'tsconfig.base.json paths (@w4xxx ×7)',
 )
 
 // web-app bundle — workspace dependencies
