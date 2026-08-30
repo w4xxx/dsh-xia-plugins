@@ -37,6 +37,9 @@
         "@deepseek-ai/dsh-client-ui-layout"
       ],
       "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     }
   },
   "scripts": {
@@ -64,5 +67,13 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "knowledge-base",
+    "panel",
+    "ui"
   ]
 }

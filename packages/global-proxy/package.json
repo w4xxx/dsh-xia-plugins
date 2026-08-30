@@ -37,5 +37,18 @@
     "typescript": "^6.0.3",
     "undici": "^7.0.0",
     "vitest": "^4.1.8"
-  }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "proxy",
+    "undici",
+    "network"
+  ]
 }
