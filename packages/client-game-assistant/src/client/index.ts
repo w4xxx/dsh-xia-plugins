@@ -199,6 +199,38 @@ async function waitForVoices(timeoutMs = 1000): Promise<SpeechSynthesisVoice[]> 
 }
 
 /**
+ * Ensure the module-level `voiceMap` is loaded. The host registers
+ * `/gameassist/voice-map` asynchronously (after the roster plugin reads its
+ * cards from disk), so a page opened right after a host restart can hit 404
+ * on the first fetch and — with a one-shot fetch — permanently lose today's
+ * character voice. This fetches with bounded exponential backoff until the
+ * route answers, guarded by a single-flight lock so parallel callers share
+ * one request chain.
+ */
+let voiceMapLoading: Promise<VoiceMap | null> | null = null
+function ensureVoiceMap(): Promise<VoiceMap | null> {
+  if (voiceMap !== null) return Promise.resolve(voiceMap)
+  if (voiceMapLoading !== null) return voiceMapLoading
+  const fetchOnce = async (): Promise<VoiceMap | null> => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const response = await fetch('/gameassist/voice-map', { cache: 'no-cache' })
+        if (!response.ok) throw new Error(`voice-map status ${response.status}`)
+        const map = await response.json() as VoiceMap
+        voiceMap = map
+        return map
+      } catch {
+        // Route not ready yet — wait with backoff (300ms, 600ms, 1.2s, 2.4s)
+        await new Promise((resolve) => window.setTimeout(resolve, 300 * 2 ** attempt))
+      }
+    }
+    return voiceMap
+  }
+  voiceMapLoading = fetchOnce().finally(() => { voiceMapLoading = null })
+  return voiceMapLoading
+}
+
+/**
  * Shared TTS speaker. Priority: a configured custom endpoint (open-source
  * engines like Kokoro/Piper/ChatTTS) → the day's character voice from the
  * roster map → the global voice preference → any Chinese voice → the browser
@@ -231,6 +263,7 @@ async function speakText(text: string, options?: { onend?: () => void }): Promis
     }
   }
   try {
+    await ensureVoiceMap()
     const synth = window.speechSynthesis
     if (synth === undefined) return { ok: false, voiceName: '' }
     const char = voiceMap === null || voiceMap.today === null ? undefined : voiceMap.voices[voiceMap.today]
@@ -479,16 +512,14 @@ function VoiceSettings(): any {
   }, [])
 
   // Fetch the role map fresh on mount so the page shows today's companion.
+  // ensureVoiceMap retries while the host route is still registering, so the
+  // settings page never locks onto a 404-triggered empty map.
   React.useEffect(() => {
     let cancelled = false
-    void fetch('/gameassist/voice-map')
-      .then((response) => (response.ok ? response.json() : null))
-      .then((mapValue) => {
-        if (cancelled || mapValue === null) return
-        voiceMap = mapValue as VoiceMap
-        setMap(mapValue as VoiceMap)
-      })
-      .catch(() => { /* route appears after the host restart — keep the module value */ })
+    void ensureVoiceMap().then((mapValue) => {
+      if (cancelled || mapValue === null) return
+      setMap(mapValue as VoiceMap)
+    })
     return () => { cancelled = true }
   }, [])
 
@@ -727,10 +758,7 @@ export function apply(ctx: any): void {
 
   ctx.effect(() => {
     let cancelled = false
-    void fetch('/gameassist/voice-map')
-      .then((response) => (response.ok ? response.json() : null))
-      .then((map) => { if (!cancelled && map !== null) voiceMap = map })
-      .catch(() => { /* route appears after the host restart — global voice remains */ })
+    void ensureVoiceMap().then((map) => { if (!cancelled && map !== null) voiceMap = map })
     return () => { cancelled = true }
   })
 

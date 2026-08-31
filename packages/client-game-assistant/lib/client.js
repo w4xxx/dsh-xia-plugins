@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "@w4xxx/dsh-client-game-assistant",
+	id: "@deepseek-ai/dsh-client-game-assistant",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -28,38 +28,38 @@ window.__ModuleLoader__.load({
 		//#endregion
 		let react = require("react");
 		react = __toESM(react, 1);
-		//#region \0dsh-css:D:\mycode\_dsh-012a1-stage\packages\client\game-assistant\src\client\styles.module.css.mjs
-		const css = ".pz0EwW_charm{color:var(--dsw-alias-label-secondary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;display:inline-flex}.pz0EwW_dot{background:var(--dsw-alias-brand-primary);border-radius:50%;width:7px;height:7px;animation:2.4s ease-in-out infinite pz0EwW_gameassist-pulse}@keyframes pz0EwW_gameassist-pulse{0%,to{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.6)}}.pz0EwW_petalLayer{pointer-events:none;z-index:1;position:fixed;inset:0;overflow:hidden}.pz0EwW_petal{background:linear-gradient(135deg,#e0558f8c,#ff7ab859);border-radius:60% 40%;width:10px;height:14px;animation-name:pz0EwW_gameassist-fall;animation-timing-function:linear;animation-iteration-count:infinite;position:absolute;top:-24px}@keyframes pz0EwW_gameassist-fall{0%{transform:translateY(-24px)rotate(0)}50%{transform:translate(28px,50vh)rotate(180deg)}to{transform:translate(-14px,105vh)rotate(360deg)}}.pz0EwW_notifyCharm{color:var(--dsw-alias-state-warn-primary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;animation:1.2s ease-in-out infinite pz0EwW_gameassist-notify-blink;display:inline-flex}@keyframes pz0EwW_gameassist-notify-blink{0%,to{opacity:1}50%{opacity:.45}}.pz0EwW_readAloud{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:5px;justify-content:center;align-items:center;padding:0;font-size:13px;line-height:1;display:inline-flex}.pz0EwW_readAloud:hover{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}.pz0EwW_readAloud[aria-pressed=true]{color:var(--dsw-alias-brand-primary)}.pz0EwW_voicePage{flex-direction:column;gap:14px;max-width:520px;display:flex}.pz0EwW_voiceTitle{color:var(--dsw-alias-label-primary);margin:0;font-size:15px}.pz0EwW_voiceSection{border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-brand-primary);margin:10px 0 0;padding-top:12px;font-size:14px;font-weight:600}.pz0EwW_voiceRow{flex-wrap:wrap;gap:8px;display:flex}.pz0EwW_voiceHint{color:var(--dsw-alias-label-secondary);margin:0;font-size:12px;line-height:1.7}.pz0EwW_voiceField{color:var(--dsw-alias-label-primary);flex-direction:column;gap:6px;font-size:13px;display:flex}.pz0EwW_voiceSelect{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:6px;padding:6px 8px}.pz0EwW_voiceRange{width:100%;accent-color:var(--dsw-alias-brand-primary)}.pz0EwW_voiceTest{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-brand-primary);cursor:pointer;border-radius:6px;align-self:flex-start;padding:6px 14px}@media (prefers-reduced-motion:reduce){.pz0EwW_dot,.pz0EwW_petal,.pz0EwW_notifyCharm{animation:none}}";
-		const tagId = "@w4xxx/dsh-client-game-assistant/styles.module.css";
+		//#region \0dsh-css:D:\mycode\deepseek-harness-master\packages\client\game-assistant\src\client\styles.module.css.mjs
+		const css = ".D7U48G_charm{color:var(--dsw-alias-label-secondary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;display:inline-flex}.D7U48G_dot{background:var(--dsw-alias-brand-primary);border-radius:50%;width:7px;height:7px;animation:2.4s ease-in-out infinite D7U48G_gameassist-pulse}@keyframes D7U48G_gameassist-pulse{0%,to{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.6)}}.D7U48G_petalLayer{pointer-events:none;z-index:1;position:fixed;inset:0;overflow:hidden}.D7U48G_petal{background:linear-gradient(135deg,#e0558f8c,#ff7ab859);border-radius:60% 40%;width:10px;height:14px;animation-name:D7U48G_gameassist-fall;animation-timing-function:linear;animation-iteration-count:infinite;position:absolute;top:-24px}@keyframes D7U48G_gameassist-fall{0%{transform:translateY(-24px)rotate(0)}50%{transform:translate(28px,50vh)rotate(180deg)}to{transform:translate(-14px,105vh)rotate(360deg)}}.D7U48G_notifyCharm{color:var(--dsw-alias-state-warn-primary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;animation:1.2s ease-in-out infinite D7U48G_gameassist-notify-blink;display:inline-flex}@keyframes D7U48G_gameassist-notify-blink{0%,to{opacity:1}50%{opacity:.45}}.D7U48G_readAloud{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:5px;justify-content:center;align-items:center;padding:0;font-size:13px;line-height:1;display:inline-flex}.D7U48G_readAloud:hover{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}.D7U48G_readAloud[aria-pressed=true]{color:var(--dsw-alias-brand-primary)}.D7U48G_voicePage{flex-direction:column;gap:14px;max-width:520px;display:flex}.D7U48G_voiceTitle{color:var(--dsw-alias-label-primary);margin:0;font-size:15px}.D7U48G_voiceSection{border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-brand-primary);margin:10px 0 0;padding-top:12px;font-size:14px;font-weight:600}.D7U48G_voiceRow{flex-wrap:wrap;gap:8px;display:flex}.D7U48G_voiceHint{color:var(--dsw-alias-label-secondary);margin:0;font-size:12px;line-height:1.7}.D7U48G_voiceField{color:var(--dsw-alias-label-primary);flex-direction:column;gap:6px;font-size:13px;display:flex}.D7U48G_voiceSelect{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:6px;padding:6px 8px}.D7U48G_voiceRange{width:100%;accent-color:var(--dsw-alias-brand-primary)}.D7U48G_voiceTest{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-brand-primary);cursor:pointer;border-radius:6px;align-self:flex-start;padding:6px 14px}@media (prefers-reduced-motion:reduce){.D7U48G_dot,.D7U48G_petal,.D7U48G_notifyCharm{animation:none}}";
+		const tagId = "@deepseek-ai/dsh-client-game-assistant/styles.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
-			tag.dataset.plugin = "@w4xxx/dsh-client-game-assistant";
+			tag.dataset.plugin = "@deepseek-ai/dsh-client-game-assistant";
 			tag.dataset.pluginCss = tagId;
 			tag.textContent = css;
 			document.head.appendChild(tag);
 		}
 		var styles_module_css_default = {
-			"charm": "pz0EwW_charm",
-			"dot": "pz0EwW_dot",
-			"gameassist-fall": "pz0EwW_gameassist-fall",
-			"gameassist-notify-blink": "pz0EwW_gameassist-notify-blink",
-			"gameassist-pulse": "pz0EwW_gameassist-pulse",
-			"notifyCharm": "pz0EwW_notifyCharm",
-			"petal": "pz0EwW_petal",
-			"petalLayer": "pz0EwW_petalLayer",
-			"readAloud": "pz0EwW_readAloud",
-			"voiceField": "pz0EwW_voiceField",
-			"voiceHint": "pz0EwW_voiceHint",
-			"voicePage": "pz0EwW_voicePage",
-			"voiceRange": "pz0EwW_voiceRange",
-			"voiceRow": "pz0EwW_voiceRow",
-			"voiceSection": "pz0EwW_voiceSection",
-			"voiceSelect": "pz0EwW_voiceSelect",
-			"voiceTest": "pz0EwW_voiceTest",
-			"voiceTitle": "pz0EwW_voiceTitle"
+			"charm": "D7U48G_charm",
+			"dot": "D7U48G_dot",
+			"gameassist-fall": "D7U48G_gameassist-fall",
+			"gameassist-notify-blink": "D7U48G_gameassist-notify-blink",
+			"gameassist-pulse": "D7U48G_gameassist-pulse",
+			"notifyCharm": "D7U48G_notifyCharm",
+			"petal": "D7U48G_petal",
+			"petalLayer": "D7U48G_petalLayer",
+			"readAloud": "D7U48G_readAloud",
+			"voiceField": "D7U48G_voiceField",
+			"voiceHint": "D7U48G_voiceHint",
+			"voicePage": "D7U48G_voicePage",
+			"voiceRange": "D7U48G_voiceRange",
+			"voiceRow": "D7U48G_voiceRow",
+			"voiceSection": "D7U48G_voiceSection",
+			"voiceSelect": "D7U48G_voiceSelect",
+			"voiceTest": "D7U48G_voiceTest",
+			"voiceTitle": "D7U48G_voiceTitle"
 		};
 		//#endregion
-		//#region lib/types/client/index.js
+		//#region src/client/index.ts
 		/**
 		* Game-assistant companion skin, browser half. Permanent "sakura" alias-token
 		* layer over the active theme, a time-aware charm line in the composer dock,
@@ -294,6 +294,36 @@ window.__ModuleLoader__.load({
 			}
 		}
 		/**
+		* Ensure the module-level `voiceMap` is loaded. The host registers
+		* `/gameassist/voice-map` asynchronously (after the roster plugin reads its
+		* cards from disk), so a page opened right after a host restart can hit 404
+		* on the first fetch and — with a one-shot fetch — permanently lose today's
+		* character voice. This fetches with bounded exponential backoff until the
+		* route answers, guarded by a single-flight lock so parallel callers share
+		* one request chain.
+		*/
+		let voiceMapLoading = null;
+		function ensureVoiceMap() {
+			if (voiceMap !== null) return Promise.resolve(voiceMap);
+			if (voiceMapLoading !== null) return voiceMapLoading;
+			const fetchOnce = async () => {
+				for (let attempt = 0; attempt < 5; attempt++) try {
+					const response = await fetch("/gameassist/voice-map", { cache: "no-cache" });
+					if (!response.ok) throw new Error(`voice-map status ${response.status}`);
+					const map = await response.json();
+					voiceMap = map;
+					return map;
+				} catch {
+					await new Promise((resolve) => window.setTimeout(resolve, 300 * 2 ** attempt));
+				}
+				return voiceMap;
+			};
+			voiceMapLoading = fetchOnce().finally(() => {
+				voiceMapLoading = null;
+			});
+			return voiceMapLoading;
+		}
+		/**
 		* Shared TTS speaker. Priority: a configured custom endpoint (open-source
 		* engines like Kokoro/Piper/ChatTTS) → the day's character voice from the
 		* roster map → the global voice preference → any Chinese voice → the browser
@@ -325,6 +355,7 @@ window.__ModuleLoader__.load({
 				};
 			} catch {}
 			try {
+				await ensureVoiceMap();
 				const synth = window.speechSynthesis;
 				if (synth === void 0) return {
 					ok: false,
@@ -563,11 +594,10 @@ window.__ModuleLoader__.load({
 			}, []);
 			react.default.useEffect(() => {
 				let cancelled = false;
-				fetch("/gameassist/voice-map").then((response) => response.ok ? response.json() : null).then((mapValue) => {
+				ensureVoiceMap().then((mapValue) => {
 					if (cancelled || mapValue === null) return;
-					voiceMap = mapValue;
 					setMap(mapValue);
-				}).catch(() => {});
+				});
 				return () => {
 					cancelled = true;
 				};
@@ -782,9 +812,9 @@ window.__ModuleLoader__.load({
 			});
 			ctx.effect(() => {
 				let cancelled = false;
-				fetch("/gameassist/voice-map").then((response) => response.ok ? response.json() : null).then((map) => {
+				ensureVoiceMap().then((map) => {
 					if (!cancelled && map !== null) voiceMap = map;
-				}).catch(() => {});
+				});
 				return () => {
 					cancelled = true;
 				};
