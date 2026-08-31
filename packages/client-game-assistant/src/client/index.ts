@@ -395,30 +395,52 @@ function ReadAloudAction(props: any): any {
   const messageId = String(props.messageId)
   const text = props.useSession((snapshot: any) => {
     const parts: string[] = []
-    const walk = (node: any): void => {
-      if (node === null || node === undefined || parts.length > 0) return
-      if (node.kind === 'assistant' && String(node.messageId) === messageId) {
-        for (const block of node.blocks ?? []) {
+    // DSH 0.1.2-alpha.1: the Session snapshot exposes Conversation views; the
+    // chat view publishes ChatConversationViewNode rows. A settled assistant
+    // row is kind 'assistant-step' with its durable presentation node under
+    // `data.finalNode` (kind 'assistant', messageId, blocks). Also handle the
+    // legacy flat shapes (top-level nodes array / chat.nodes view store /
+    // legacy.nodes projection) so older checkouts keep working.
+    const collectFinal = (viewNode: any): void => {
+      if (viewNode === null || viewNode === undefined || parts.length > 0) return
+      const data = viewNode.data
+      const final = data === null || data === undefined ? undefined : data.finalNode
+      if (final !== undefined && final !== null && final.kind === 'assistant' && String(final.messageId) === messageId) {
+        for (const block of final.blocks ?? []) {
           if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
         }
-        return
       }
-      if (typeof node.node === 'object' && node.node !== null) walk(node.node)
     }
     if (snapshot !== null && snapshot !== undefined) {
-      // Current ChatSnapshot: the legacy projection carries the flat
-      // ConversationNode list (`legacy.nodes`); top-level `nodes` is now a
-      // ChatNodeStore object, and `chat.nodes` a view-node store — both
-      // non-iterable here, so prefer legacy, then the older shapes.
-      const legacyNodes = snapshot.legacy?.nodes
-      if (legacyNodes !== undefined) {
-        for (const node of legacyNodes) walk(node)
+      // New shape: snapshot.views.get('chat').nodes.values() → view rows.
+      const views = snapshot.views
+      const chatView = views !== undefined && typeof views.get === 'function' ? views.get('chat') : undefined
+      const store = chatView === undefined || chatView === null ? undefined : chatView.nodes
+      if (store !== undefined && typeof store.values === 'function') {
+        for (const viewNode of store.values()) collectFinal(viewNode)
+      }
+      // Legacy fallbacks: flat ConversationNode list / view-node store / chat view.
+      const legacyNodes = chatView !== undefined && chatView !== null ? chatView.legacy?.nodes : undefined
+      if (parts.length === 0 && legacyNodes !== undefined) {
+        for (const node of legacyNodes) {
+          if (node.kind === 'assistant' && String(node.messageId) === messageId) {
+            for (const block of node.blocks ?? []) {
+              if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
+            }
+          }
+        }
       }
       if (parts.length === 0 && Array.isArray(snapshot.nodes)) {
-        for (const node of snapshot.nodes) walk(node)
+        for (const node of snapshot.nodes) {
+          if (node.kind === 'assistant' && String(node.messageId) === messageId) {
+            for (const block of node.blocks ?? []) {
+              if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
+            }
+          }
+        }
       }
       if (parts.length === 0 && snapshot.chat !== undefined && snapshot.chat.nodes !== undefined && typeof snapshot.chat.nodes.values === 'function') {
-        for (const node of snapshot.chat.nodes.values()) walk(node)
+        for (const viewNode of snapshot.chat.nodes.values()) collectFinal(viewNode)
       }
     }
     return parts.length === 0 ? null : parts.join('\n')
