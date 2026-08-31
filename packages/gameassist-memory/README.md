@@ -16,7 +16,13 @@
 
 ## 配置与接入
 
-唯一配置项是 `memoryFile: string`，表示单个 JSON 记忆文件的绝对路径。保存时会递归创建父目录。
+配置项：
+
+- `memoryFile: string`（必需）：单个 JSON 记忆文件的绝对路径。保存时会递归创建父目录。
+- `maxNoteChars: number`（可选）：注入系统提示词时，每条任务 `notes` 最多保留的字符数。默认 `200`；设 `0` 完全隐藏 notes。完整内容仍可通过 `memory_read` 工具读取。
+- `maxSummaryChars: number`（可选）：注入系统提示词时，每条作品 `summary` 最多保留的字符数。默认 `120`；设 `0` 完全隐藏 summary。完整内容仍可通过 `memory_read` 工具读取。
+
+> 截断只影响注入的系统提示词摘要，磁盘上的记忆文件始终保留完整内容，`memory_read` 也始终返回完整内容。这样记忆库再大也不会拖垮每次对话的 token，需要细节时随时用工具取。
 
 Loader/profile patch 示例：
 
@@ -35,6 +41,8 @@ Agent preset 的 `agent.cordis.yml` 示例：
   name: '@your-scope/gameassist-memory'
   config:
     memoryFile: 'D:/dsh-data/gameassist/memory.json'
+    maxNoteChars: 200
+    maxSummaryChars: 120
 ```
 
 本插件不提供 Cordis service，因此不需要 `isolate` realm。若多个 preset 或 Loader 行指向同一文件，它们仍是独立内存副本，且没有跨实例协调；应只挂载一个写入者，或为每个实例配置不同文件。
@@ -97,7 +105,7 @@ Agent preset 的 `agent.cordis.yml` 示例：
 
 ## 提示词、模型与缓存
 
-记忆摘要和固定记录指令会进入每次模型请求的系统提示词，两个工具的 schema 也对模型可见。token 成本随兴趣、任务、作品及备注长度线性增长，没有截断或预算。记忆不变时前缀稳定；`memory_update` 改写提示词后，后续请求从该段起不能复用旧前缀。工具结果也会把更新后的完整摘要返回到当前会话。
+记忆摘要和固定记录指令会进入每次模型请求的系统提示词，两个工具的 schema 也对模型可见。token 成本随兴趣、任务、作品及备注长度线性增长；**注入摘要默认按 `maxNoteChars`/`maxSummaryChars` 截断**（默认 200/120 字符），超出部分不会进入提示词，需要完整内容时调用 `memory_read`。记忆不变时前缀稳定；`memory_update` 改写提示词后，后续请求从该段起不能复用旧前缀。工具结果也会把更新后的完整摘要返回到当前会话。
 
 ## 持久化、隐私与安全
 
@@ -127,5 +135,5 @@ pnpm --filter @w4xxx/dsh-gameassist-memory bundle
 - 写入非原子且无锁；并发工具调用、多个插件实例或多个进程可能覆盖彼此或损坏文件。
 - 读入数据没有 schema 校验、大小限制或迁移；任意解析/读取错误都静默回退为空记忆。
 - 兴趣、偏好和 `workTech` 是全列表替换，不提供单项追加/删除操作。
-- 提示词摘要不做长度限制、脱敏或访问控制。
+- 提示词摘要默认截断（`maxNoteChars`/`maxSummaryChars`），但仍不做敏感信息脱敏；完整内容始终保留在磁盘上。
 - 当前测试覆盖纯更新逻辑，不覆盖真实 Loader 组合、文件 I/O 失败、并发写入或插件生命周期。

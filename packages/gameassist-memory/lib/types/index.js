@@ -17,6 +17,8 @@ export const inject = ['systemPrompt', 'tools'];
 /** Schemastery validation for {@link Config}. */
 export const Config = z.object({
     memoryFile: z.string(),
+    maxNoteChars: z.number().default(200),
+    maxSummaryChars: z.number().default(120),
 });
 /** Empty bank used when the file is missing or unreadable. */
 export const EMPTY_MEMORY = {
@@ -35,8 +37,14 @@ export function nowIso() {
 export function splitList(text) {
     return text.split(/[,，、;；\n]/).map(item => item.trim()).filter(item => item !== '');
 }
+/** Render a single text field, clipped to `max` characters when set. */
+export function clipText(text, max) {
+    if (max === undefined || text.length <= max)
+        return text;
+    return `${text.slice(0, max)}…`;
+}
 /** Render the bank as a compact prompt block. */
-export function renderMemory(memory) {
+export function renderMemory(memory, options = {}) {
     const lines = [];
     if (memory.interests.length > 0)
         lines.push(`兴趣：${memory.interests.join('、')}`);
@@ -47,14 +55,16 @@ export function renderMemory(memory) {
     if (memory.tasks.length > 0) {
         lines.push('任务：');
         for (const task of memory.tasks) {
-            lines.push(`- [${task.status ?? 'todo'}] ${task.title}${task.notes === undefined || task.notes === '' ? '' : `（${task.notes}）`}`);
+            const notes = task.notes === undefined || task.notes === '' ? '' : `（${clipText(task.notes, options.maxNoteChars)}）`;
+            lines.push(`- [${task.status ?? 'todo'}] ${task.title}${notes}`);
         }
     }
     if (memory.works.length > 0) {
         lines.push('过去作品：');
         for (const work of memory.works) {
             const tech = work.tech === undefined || work.tech.length === 0 ? '' : `，技术：${work.tech.join('/')}`;
-            lines.push(`- ${work.name}${work.kind === undefined ? '' : `（${work.kind}）`}${work.summary === undefined ? '' : `：${work.summary}`}${tech}${work.path === undefined ? '' : `，路径：${work.path}`}${work.status === undefined ? '' : `，状态：${work.status}`}`);
+            const summary = work.summary === undefined || work.summary === '' ? '' : `：${clipText(work.summary, options.maxSummaryChars)}`;
+            lines.push(`- ${work.name}${work.kind === undefined ? '' : `（${work.kind}）`}${summary}${tech}${work.path === undefined ? '' : `，路径：${work.path}`}${work.status === undefined ? '' : `，状态：${work.status}`}`);
         }
     }
     return lines.length === 0 ? '（记忆库还是空的）' : lines.join('\n');
@@ -139,16 +149,24 @@ export function applyMemoryUpdate(previous, args) {
 export function apply(ctx, config) {
     const memoryFile = config.memoryFile;
     let memory = { ...EMPTY_MEMORY };
+    const renderOptions = {
+        maxNoteChars: config.maxNoteChars ?? 200,
+        maxSummaryChars: config.maxSummaryChars ?? 120,
+    };
     let disposedSection;
     const registerSection = () => {
         disposedSection?.();
         disposedSection = undefined;
+        const summary = renderMemory(memory, renderOptions);
+        const full = renderMemory(memory);
+        const truncated = summary !== full;
         disposedSection = ctx.systemPrompt.section({
             name: 'gameassist:memory',
             order: 11,
             text: [
                 '【主人记忆 · 持久化】以下是从记忆库读取的主人信息，请在对话中主动参考：',
-                renderMemory(memory),
+                summary,
+                ...(truncated ? ['（长文本已按配置截断，完整内容可随时调用 memory_read 工具查看）'] : []),
                 '发现主人新的兴趣、喜好、任务或作品时，主动调用 memory_update 工具记录；任务状态变化时及时更新。',
             ].join('\n'),
         });
@@ -178,7 +196,7 @@ export function apply(ctx, config) {
     ctx.effect(() => {
         const disposeRead = ctx.tools.register({
             name: 'memory_read',
-            description: 'Read the persistent memory bank (interests, preferences, tasks, past works).',
+            description: 'Read the full persistent memory bank (interests, preferences, tasks, past works). Unlike the injected system-prompt summary, this returns the complete untruncated content even when maxNoteChars/maxSummaryChars are configured.',
             parameters: { type: 'object', properties: {} },
             output: { schema: { type: 'string' }, render(_a, v) { return [{ type: 'text', text: v }]; } },
             execute: async () => renderMemory(memory),

@@ -16,7 +16,13 @@
 
 ## Configuration and integration
 
-The only config field is `memoryFile: string`, the absolute path to one JSON memory file. Saving recursively creates its parent directory.
+Config fields:
+
+- `memoryFile: string` (required): the absolute path to one JSON memory file. Saving recursively creates its parent directory.
+- `maxNoteChars: number` (optional): max characters kept per task `notes` in the injected system-prompt summary. Default `200`; set `0` to hide notes entirely. Full content stays available through `memory_read`.
+- `maxSummaryChars: number` (optional): max characters kept per work `summary` in the injected system-prompt summary. Default `120`; set `0` to hide summaries entirely. Full content stays available through `memory_read`.
+
+> Truncation only affects the injected prompt summary. The on-disk file always keeps the full content, and `memory_read` always returns it in full — so a large memory bank no longer inflates every request's token cost, and details are one tool call away.
 
 Loader/profile patch example:
 
@@ -26,6 +32,8 @@ Loader/profile patch example:
       name: '@your-scope/gameassist-memory'
       config:
         memoryFile: 'D:/dsh-data/gameassist/memory.json'
+        maxNoteChars: 200
+        maxSummaryChars: 120
 ```
 
 Agent preset `agent.cordis.yml` example:
@@ -35,6 +43,8 @@ Agent preset `agent.cordis.yml` example:
   name: '@your-scope/gameassist-memory'
   config:
     memoryFile: 'D:/dsh-data/gameassist/memory.json'
+    maxNoteChars: 200
+    maxSummaryChars: 120
 ```
 
 The plugin provides no Cordis service, so it does not need an `isolate` realm. Multiple presets or Loader rows pointing to one file still hold independent in-memory copies with no cross-instance coordination. Mount one writer only, or configure a separate file per instance.
@@ -97,7 +107,7 @@ Removal happens before upsert in the same call, so deleting an id while also sup
 
 ## Prompt, model, and cache effects
 
-The rendered summary and fixed recording instruction enter the system prompt on every model request, and both tool schemas are model-visible. Token cost grows linearly with interests, tasks, works, and note length; there is no truncation or budget. Stable memory preserves the prefix. After `memory_update` changes the prompt, later requests cannot reuse the old prefix from that section onward. The tool result also returns the complete updated summary to the current conversation.
+The rendered summary and fixed recording instruction enter the system prompt on every model request, and both tool schemas are model-visible. Token cost grows linearly with interests, tasks, works, and note length; **the injected summary is truncated by default** (`maxNoteChars`/`maxSummaryChars`, 200/120 chars) so oversized entries do not enter the prompt — call `memory_read` for full content. Stable memory preserves the prefix. After `memory_update` changes the prompt, later requests cannot reuse the old prefix from that section onward. The tool result also returns the complete updated summary to the current conversation.
 
 ## Persistence, privacy, and security
 
@@ -127,5 +137,5 @@ pnpm --filter @w4xxx/dsh-gameassist-memory bundle
 - Writes are non-atomic and unlocked; concurrent tool calls, plugin instances, or processes can overwrite each other or corrupt the file.
 - Loaded data has no schema validation, size limit, or migration; any read/parse error silently falls back to empty memory.
 - Interests, preferences, and `workTech` use whole-list replacement, with no single-item append/remove operation.
-- The prompt summary has no length limit, redaction, or access control.
+- The prompt summary is truncated by default (`maxNoteChars`/`maxSummaryChars`) but still performs no redaction or access control; full content always stays on disk.
 - Current tests cover pure update logic, not a real Loader composition, file-I/O failures, concurrent writes, or plugin lifecycle.

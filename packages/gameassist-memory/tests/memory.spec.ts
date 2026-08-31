@@ -3,7 +3,7 @@
  * upsert semantics.
  */
 import { describe, expect, it } from 'vitest'
-import { applyMemoryUpdate, EMPTY_MEMORY, renderMemory, splitList } from '../src/index.ts'
+import { applyMemoryUpdate, clipText, EMPTY_MEMORY, renderMemory, splitList } from '../src/index.ts'
 
 describe('gameassist-memory', () => {
   it('splitList splits and trims', () => {
@@ -44,5 +44,42 @@ describe('gameassist-memory', () => {
     expect(text).toContain('My Forum Game')
     expect(text).toContain('Godot 4.7')
     expect(text).toContain('开发中')
+  })
+
+  it('clipText truncates long text with an ellipsis', () => {
+    expect(clipText('短文本', 10)).toBe('短文本')
+    expect(clipText('中文文本', 3)).toBe('中文文…')
+    expect(clipText('text', undefined)).toBe('text')
+    expect(clipText('', 3)).toBe('')
+  })
+
+  it('renderMemory truncates notes and summaries when limits are set', () => {
+    const memory = applyMemoryUpdate(EMPTY_MEMORY, { taskTitle: '写剧情', taskNotes: '一二三四五六七八九十' })
+    const withWork = applyMemoryUpdate(memory, { workName: '游戏', workSummary: 'abcdefghij' })
+    const full = renderMemory(withWork)
+    expect(full).toContain('一二三四五六七八九十')
+    expect(full).toContain('abcdefghij')
+
+    const clipped = renderMemory(withWork, { maxNoteChars: 4, maxSummaryChars: 5 })
+    expect(clipped).toContain('一二三四…')
+    expect(clipped).not.toContain('五六七八九十')
+    expect(clipped).toContain('abcde…')
+    expect(clipped).not.toContain('fghij')
+  })
+
+  it('renderMemory limit 0 hides notes and summaries entirely', () => {
+    const memory = applyMemoryUpdate(EMPTY_MEMORY, { taskTitle: '写剧情', taskNotes: '细节' })
+    const withWork = applyMemoryUpdate(memory, { workName: '游戏', workSummary: '摘要' })
+    const clipped = renderMemory(withWork, { maxNoteChars: 0, maxSummaryChars: 0 })
+    expect(clipped).toContain('写剧情')
+    expect(clipped).not.toContain('细节')
+    expect(clipped).toContain('游戏')
+    expect(clipped).not.toContain('摘要')
+  })
+
+  it('full render is unaffected when no limits are set', () => {
+    const memory = applyMemoryUpdate(EMPTY_MEMORY, { taskTitle: '任务', taskNotes: '很长很长的备注' })
+    expect(renderMemory(memory, { maxNoteChars: 200 })).toContain('很长很长的备注')
+    expect(renderMemory(memory, {})).toContain('很长很长的备注')
   })
 })

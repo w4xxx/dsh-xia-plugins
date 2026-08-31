@@ -16,7 +16,11 @@ const name = "gameassist-memory";
 /** The registries this plugin contributes to. */
 const inject = ["systemPrompt", "tools"];
 /** Schemastery validation for {@link Config}. */
-const Config = z.object({ memoryFile: z.string() });
+const Config = z.object({
+	memoryFile: z.string(),
+	maxNoteChars: z.number().default(200),
+	maxSummaryChars: z.number().default(120)
+});
 /** Empty bank used when the file is missing or unreadable. */
 const EMPTY_MEMORY = {
 	interests: [],
@@ -34,21 +38,30 @@ function nowIso() {
 function splitList(text) {
 	return text.split(/[,，、;；\n]/).map((item) => item.trim()).filter((item) => item !== "");
 }
+/** Render a single text field, clipped to `max` characters when set. */
+function clipText(text, max) {
+	if (max === void 0 || text.length <= max) return text;
+	return `${text.slice(0, max)}…`;
+}
 /** Render the bank as a compact prompt block. */
-function renderMemory(memory) {
+function renderMemory(memory, options = {}) {
 	const lines = [];
 	if (memory.interests.length > 0) lines.push(`兴趣：${memory.interests.join("、")}`);
 	if (memory.preferences.length > 0) lines.push(`喜好/偏好：${memory.preferences.join("、")}`);
 	if (memory.profileNotes !== "") lines.push(`备注：${memory.profileNotes}`);
 	if (memory.tasks.length > 0) {
 		lines.push("任务：");
-		for (const task of memory.tasks) lines.push(`- [${task.status ?? "todo"}] ${task.title}${task.notes === void 0 || task.notes === "" ? "" : `（${task.notes}）`}`);
+		for (const task of memory.tasks) {
+			const notes = task.notes === void 0 || task.notes === "" ? "" : `（${clipText(task.notes, options.maxNoteChars)}）`;
+			lines.push(`- [${task.status ?? "todo"}] ${task.title}${notes}`);
+		}
 	}
 	if (memory.works.length > 0) {
 		lines.push("过去作品：");
 		for (const work of memory.works) {
 			const tech = work.tech === void 0 || work.tech.length === 0 ? "" : `，技术：${work.tech.join("/")}`;
-			lines.push(`- ${work.name}${work.kind === void 0 ? "" : `（${work.kind}）`}${work.summary === void 0 ? "" : `：${work.summary}`}${tech}${work.path === void 0 ? "" : `，路径：${work.path}`}${work.status === void 0 ? "" : `，状态：${work.status}`}`);
+			const summary = work.summary === void 0 || work.summary === "" ? "" : `：${clipText(work.summary, options.maxSummaryChars)}`;
+			lines.push(`- ${work.name}${work.kind === void 0 ? "" : `（${work.kind}）`}${summary}${tech}${work.path === void 0 ? "" : `，路径：${work.path}`}${work.status === void 0 ? "" : `，状态：${work.status}`}`);
 		}
 	}
 	return lines.length === 0 ? "（记忆库还是空的）" : lines.join("\n");
@@ -114,16 +127,23 @@ function applyMemoryUpdate(previous, args) {
 function apply(ctx, config) {
 	const memoryFile = config.memoryFile;
 	let memory = { ...EMPTY_MEMORY };
+	const renderOptions = {
+		maxNoteChars: config.maxNoteChars ?? 200,
+		maxSummaryChars: config.maxSummaryChars ?? 120
+	};
 	let disposedSection;
 	const registerSection = () => {
 		disposedSection?.();
 		disposedSection = void 0;
+		const summary = renderMemory(memory, renderOptions);
+		const truncated = summary !== renderMemory(memory);
 		disposedSection = ctx.systemPrompt.section({
 			name: "gameassist:memory",
 			order: 11,
 			text: [
 				"【主人记忆 · 持久化】以下是从记忆库读取的主人信息，请在对话中主动参考：",
-				renderMemory(memory),
+				summary,
+				...truncated ? ["（长文本已按配置截断，完整内容可随时调用 memory_read 工具查看）"] : [],
 				"发现主人新的兴趣、喜好、任务或作品时，主动调用 memory_update 工具记录；任务状态变化时及时更新。"
 			].join("\n")
 		});
@@ -151,7 +171,7 @@ function apply(ctx, config) {
 	ctx.effect(() => {
 		const disposeRead = ctx.tools.register({
 			name: "memory_read",
-			description: "Read the persistent memory bank (interests, preferences, tasks, past works).",
+			description: "Read the full persistent memory bank (interests, preferences, tasks, past works). Unlike the injected system-prompt summary, this returns the complete untruncated content even when maxNoteChars/maxSummaryChars are configured.",
 			parameters: {
 				type: "object",
 				properties: {}
@@ -215,4 +235,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { Config, EMPTY_MEMORY, apply, applyMemoryUpdate, inject, name, nowIso, renderMemory, splitList };
+export { Config, EMPTY_MEMORY, apply, applyMemoryUpdate, clipText, inject, name, nowIso, renderMemory, splitList };

@@ -22,11 +22,26 @@ export const inject = ['systemPrompt', 'tools']
 export interface Config {
   /** Absolute path of the JSON memory bank file. */
   memoryFile: string
+  /**
+   * Truncate each task's notes to this many characters in the injected
+   * system-prompt summary. Omit to keep notes unbounded; set `0` to hide
+   * notes entirely. Full notes stay available through `memory_read`.
+   */
+  maxNoteChars?: number
+  /**
+   * Truncate each work's summary to this many characters in the injected
+   * system-prompt summary. Omit to keep summaries unbounded; set `0` to
+   * hide summaries entirely. Full summaries stay available through
+   * `memory_read`.
+   */
+  maxSummaryChars?: number
 }
 
 /** Schemastery validation for {@link Config}. */
 export const Config: z<Config> = z.object({
   memoryFile: z.string(),
+  maxNoteChars: z.number().default(200),
+  maxSummaryChars: z.number().default(120),
 })
 
 /** One remembered task. */
@@ -100,8 +115,22 @@ export function splitList(text: string): string[] {
   return text.split(/[,，、;；\n]/).map(item => item.trim()).filter(item => item !== '')
 }
 
+/** Options controlling how {@link renderMemory} renders the bank. */
+export interface RenderOptions {
+  /** Truncate each task's notes to at most this many characters. */
+  maxNoteChars?: number
+  /** Truncate each work's summary to at most this many characters. */
+  maxSummaryChars?: number
+}
+
+/** Render a single text field, clipped to `max` characters when set. */
+export function clipText(text: string, max: number | undefined): string {
+  if (max === undefined || text.length <= max) return text
+  return `${text.slice(0, max)}…`
+}
+
 /** Render the bank as a compact prompt block. */
-export function renderMemory(memory: Memory): string {
+export function renderMemory(memory: Memory, options: RenderOptions = {}): string {
   const lines: string[] = []
   if (memory.interests.length > 0) lines.push(`兴趣：${memory.interests.join('、')}`)
   if (memory.preferences.length > 0) lines.push(`喜好/偏好：${memory.preferences.join('、')}`)
@@ -109,15 +138,17 @@ export function renderMemory(memory: Memory): string {
   if (memory.tasks.length > 0) {
     lines.push('任务：')
     for (const task of memory.tasks) {
-      lines.push(`- [${task.status ?? 'todo'}] ${task.title}${task.notes === undefined || task.notes === '' ? '' : `（${task.notes}）`}`)
+      const notes = task.notes === undefined || task.notes === '' ? '' : `（${clipText(task.notes, options.maxNoteChars)}）`
+      lines.push(`- [${task.status ?? 'todo'}] ${task.title}${notes}`)
     }
   }
   if (memory.works.length > 0) {
     lines.push('过去作品：')
     for (const work of memory.works) {
       const tech = work.tech === undefined || work.tech.length === 0 ? '' : `，技术：${work.tech.join('/')}`
+      const summary = work.summary === undefined || work.summary === '' ? '' : `：${clipText(work.summary, options.maxSummaryChars)}`
       lines.push(
-        `- ${work.name}${work.kind === undefined ? '' : `（${work.kind}）`}${work.summary === undefined ? '' : `：${work.summary}`}${tech}${work.path === undefined ? '' : `，路径：${work.path}`}${work.status === undefined ? '' : `，状态：${work.status}`}`,
+        `- ${work.name}${work.kind === undefined ? '' : `（${work.kind}）`}${summary}${tech}${work.path === undefined ? '' : `，路径：${work.path}`}${work.status === undefined ? '' : `，状态：${work.status}`}`,
       )
     }
   }
@@ -195,16 +226,25 @@ export function apply(ctx: any, config: Config): void {
   const memoryFile = config.memoryFile
   let memory: Memory = { ...EMPTY_MEMORY }
 
+  const renderOptions: RenderOptions = {
+    maxNoteChars: config.maxNoteChars ?? 200,
+    maxSummaryChars: config.maxSummaryChars ?? 120,
+  }
+
   let disposedSection: (() => void) | undefined
   const registerSection = (): void => {
     disposedSection?.()
     disposedSection = undefined
+    const summary = renderMemory(memory, renderOptions)
+    const full = renderMemory(memory)
+    const truncated = summary !== full
     disposedSection = ctx.systemPrompt.section({
       name: 'gameassist:memory',
       order: 11,
       text: [
         '【主人记忆 · 持久化】以下是从记忆库读取的主人信息，请在对话中主动参考：',
-        renderMemory(memory),
+        summary,
+        ...(truncated ? ['（长文本已按配置截断，完整内容可随时调用 memory_read 工具查看）'] : []),
         '发现主人新的兴趣、喜好、任务或作品时，主动调用 memory_update 工具记录；任务状态变化时及时更新。',
       ].join('\n'),
     })
@@ -235,7 +275,7 @@ export function apply(ctx: any, config: Config): void {
   ctx.effect(() => {
     const disposeRead = ctx.tools.register({
       name: 'memory_read',
-      description: 'Read the persistent memory bank (interests, preferences, tasks, past works).',
+      description: 'Read the full persistent memory bank (interests, preferences, tasks, past works). Unlike the injected system-prompt summary, this returns the complete untruncated content even when maxNoteChars/maxSummaryChars are configured.',
       parameters: { type: 'object', properties: {} },
       output: { schema: { type: 'string' }, render(_a: unknown, v: string) { return [{ type: 'text', text: v }] } },
       execute: async () => renderMemory(memory),

@@ -16,6 +16,19 @@ export declare const inject: string[];
 export interface Config {
     /** Absolute path of the JSON memory bank file. */
     memoryFile: string;
+    /**
+     * Truncate each task's notes to this many characters in the injected
+     * system-prompt summary. Omit to keep notes unbounded; set `0` to hide
+     * notes entirely. Full notes stay available through `memory_read`.
+     */
+    maxNoteChars?: number;
+    /**
+     * Truncate each work's summary to this many characters in the injected
+     * system-prompt summary. Omit to keep summaries unbounded; set `0` to
+     * hide summaries entirely. Full summaries stay available through
+     * `memory_read`.
+     */
+    maxSummaryChars?: number;
 }
 /** Schemastery validation for {@link Config}. */
 export declare const Config: z<Config>;
@@ -72,8 +85,17 @@ export declare const EMPTY_MEMORY: Memory;
 export declare function nowIso(): string;
 /** Split a comma/、/;/-separated line into trimmed non-empty items. */
 export declare function splitList(text: string): string[];
+/** Options controlling how {@link renderMemory} renders the bank. */
+export interface RenderOptions {
+    /** Truncate each task's notes to at most this many characters. */
+    maxNoteChars?: number;
+    /** Truncate each work's summary to at most this many characters. */
+    maxSummaryChars?: number;
+}
+/** Render a single text field, clipped to `max` characters when set. */
+export declare function clipText(text: string, max: number | undefined): string;
 /** Render the bank as a compact prompt block. */
-export declare function renderMemory(memory: Memory): string;
+export declare function renderMemory(memory: Memory, options?: RenderOptions): string;
 /** Apply one `memory_update` argument set to a bank, returning a new bank. */
 export declare function applyMemoryUpdate(previous: Memory, args: MemoryUpdateArgs): Memory;
 /**
