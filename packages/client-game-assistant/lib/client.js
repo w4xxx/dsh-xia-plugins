@@ -486,7 +486,9 @@ window.__ModuleLoader__.load({
 					if (typeof node.node === "object" && node.node !== null) walk(node.node);
 				};
 				if (snapshot !== null && snapshot !== void 0) {
-					for (const node of snapshot.nodes ?? []) walk(node);
+					const legacyNodes = snapshot.legacy?.nodes;
+					if (legacyNodes !== void 0) for (const node of legacyNodes) walk(node);
+					if (parts.length === 0 && Array.isArray(snapshot.nodes)) for (const node of snapshot.nodes) walk(node);
 					if (parts.length === 0 && snapshot.chat !== void 0 && snapshot.chat.nodes !== void 0 && typeof snapshot.chat.nodes.values === "function") for (const node of snapshot.chat.nodes.values()) walk(node);
 				}
 				return parts.length === 0 ? null : parts.join("\n");

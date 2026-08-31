@@ -406,7 +406,17 @@ function ReadAloudAction(props: any): any {
       if (typeof node.node === 'object' && node.node !== null) walk(node.node)
     }
     if (snapshot !== null && snapshot !== undefined) {
-      for (const node of snapshot.nodes ?? []) walk(node)
+      // Current ChatSnapshot: the legacy projection carries the flat
+      // ConversationNode list (`legacy.nodes`); top-level `nodes` is now a
+      // ChatNodeStore object, and `chat.nodes` a view-node store — both
+      // non-iterable here, so prefer legacy, then the older shapes.
+      const legacyNodes = snapshot.legacy?.nodes
+      if (legacyNodes !== undefined) {
+        for (const node of legacyNodes) walk(node)
+      }
+      if (parts.length === 0 && Array.isArray(snapshot.nodes)) {
+        for (const node of snapshot.nodes) walk(node)
+      }
       if (parts.length === 0 && snapshot.chat !== undefined && snapshot.chat.nodes !== undefined && typeof snapshot.chat.nodes.values === 'function') {
         for (const node of snapshot.chat.nodes.values()) walk(node)
       }
