@@ -393,54 +393,41 @@ async function speakDefaultText(text: string): Promise<void> {
  */
 function ReadAloudAction(props: any): any {
   const messageId = String(props.messageId)
-  const text = props.useSession((snapshot: any) => {
+  // DSH 0.1.2-alpha.1: session-scoped slots inject `useChat` (ChatSnapshot),
+  // not `useSession`. ChatSnapshot carries the flat ConversationNode list
+  // under `legacy.nodes`; assistant nodes there have kind 'assistant' plus
+  // messageId/blocks. Fall back to the view store and old shapes for older
+  // checkouts.
+  const useChat = props.useChat ?? props.useSession
+  const text = useChat((snapshot: any) => {
     const parts: string[] = []
-    // DSH 0.1.2-alpha.1: the Session snapshot exposes Conversation views; the
-    // chat view publishes ChatConversationViewNode rows. A settled assistant
-    // row is kind 'assistant-step' with its durable presentation node under
-    // `data.finalNode` (kind 'assistant', messageId, blocks). Also handle the
-    // legacy flat shapes (top-level nodes array / chat.nodes view store /
-    // legacy.nodes projection) so older checkouts keep working.
-    const collectFinal = (viewNode: any): void => {
-      if (viewNode === null || viewNode === undefined || parts.length > 0) return
-      const data = viewNode.data
-      const final = data === null || data === undefined ? undefined : data.finalNode
-      if (final !== undefined && final !== null && final.kind === 'assistant' && String(final.messageId) === messageId) {
-        for (const block of final.blocks ?? []) {
+    const collect = (node: any): void => {
+      if (node === null || node === undefined || parts.length > 0) return
+      if (node.kind === 'assistant' && String(node.messageId) === messageId) {
+        for (const block of node.blocks ?? []) {
           if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
         }
       }
     }
     if (snapshot !== null && snapshot !== undefined) {
-      // New shape: snapshot.views.get('chat').nodes.values() → view rows.
-      const views = snapshot.views
-      const chatView = views !== undefined && typeof views.get === 'function' ? views.get('chat') : undefined
-      const store = chatView === undefined || chatView === null ? undefined : chatView.nodes
-      if (store !== undefined && typeof store.values === 'function') {
-        for (const viewNode of store.values()) collectFinal(viewNode)
+      const legacyNodes = snapshot.legacy?.nodes
+      if (legacyNodes !== undefined) {
+        for (const node of legacyNodes) collect(node)
       }
-      // Legacy fallbacks: flat ConversationNode list / view-node store / chat view.
-      const legacyNodes = chatView !== undefined && chatView !== null ? chatView.legacy?.nodes : undefined
-      if (parts.length === 0 && legacyNodes !== undefined) {
-        for (const node of legacyNodes) {
-          if (node.kind === 'assistant' && String(node.messageId) === messageId) {
-            for (const block of node.blocks ?? []) {
-              if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
-            }
-          }
+      if (parts.length === 0 && snapshot.nodes !== undefined && typeof snapshot.nodes.values === 'function') {
+        for (const viewNode of snapshot.nodes.values()) {
+          const final = viewNode?.data?.finalNode
+          if (final !== undefined && final !== null) collect(final)
         }
       }
       if (parts.length === 0 && Array.isArray(snapshot.nodes)) {
-        for (const node of snapshot.nodes) {
-          if (node.kind === 'assistant' && String(node.messageId) === messageId) {
-            for (const block of node.blocks ?? []) {
-              if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string') parts.push(block.text)
-            }
-          }
-        }
+        for (const node of snapshot.nodes) collect(node)
       }
       if (parts.length === 0 && snapshot.chat !== undefined && snapshot.chat.nodes !== undefined && typeof snapshot.chat.nodes.values === 'function') {
-        for (const viewNode of snapshot.chat.nodes.values()) collectFinal(viewNode)
+        for (const viewNode of snapshot.chat.nodes.values()) {
+          const final = viewNode?.data?.finalNode
+          if (final !== undefined && final !== null) collect(final)
+        }
       }
     }
     return parts.length === 0 ? null : parts.join('\n')

@@ -475,33 +475,26 @@ window.__ModuleLoader__.load({
 		*/
 		function ReadAloudAction(props) {
 			const messageId = String(props.messageId);
-			const text = props.useSession((snapshot) => {
+			const text = (props.useChat ?? props.useSession)((snapshot) => {
 				const parts = [];
-				const collectFinal = (viewNode) => {
-					if (viewNode === null || viewNode === void 0 || parts.length > 0) return;
-					const data = viewNode.data;
-					const final = data === null || data === void 0 ? void 0 : data.finalNode;
-					if (final !== void 0 && final !== null && final.kind === "assistant" && String(final.messageId) === messageId) {
-						for (const block of final.blocks ?? []) if ((block.kind === "text" || block.type === "text") && typeof block.text === "string") parts.push(block.text);
+				const collect = (node) => {
+					if (node === null || node === void 0 || parts.length > 0) return;
+					if (node.kind === "assistant" && String(node.messageId) === messageId) {
+						for (const block of node.blocks ?? []) if ((block.kind === "text" || block.type === "text") && typeof block.text === "string") parts.push(block.text);
 					}
 				};
 				if (snapshot !== null && snapshot !== void 0) {
-					const views = snapshot.views;
-					const chatView = views !== void 0 && typeof views.get === "function" ? views.get("chat") : void 0;
-					const store = chatView === void 0 || chatView === null ? void 0 : chatView.nodes;
-					if (store !== void 0 && typeof store.values === "function") for (const viewNode of store.values()) collectFinal(viewNode);
-					const legacyNodes = chatView !== void 0 && chatView !== null ? chatView.legacy?.nodes : void 0;
-					if (parts.length === 0 && legacyNodes !== void 0) {
-						for (const node of legacyNodes) if (node.kind === "assistant" && String(node.messageId) === messageId) {
-							for (const block of node.blocks ?? []) if ((block.kind === "text" || block.type === "text") && typeof block.text === "string") parts.push(block.text);
-						}
+					const legacyNodes = snapshot.legacy?.nodes;
+					if (legacyNodes !== void 0) for (const node of legacyNodes) collect(node);
+					if (parts.length === 0 && snapshot.nodes !== void 0 && typeof snapshot.nodes.values === "function") for (const viewNode of snapshot.nodes.values()) {
+						const final = viewNode?.data?.finalNode;
+						if (final !== void 0 && final !== null) collect(final);
 					}
-					if (parts.length === 0 && Array.isArray(snapshot.nodes)) {
-						for (const node of snapshot.nodes) if (node.kind === "assistant" && String(node.messageId) === messageId) {
-							for (const block of node.blocks ?? []) if ((block.kind === "text" || block.type === "text") && typeof block.text === "string") parts.push(block.text);
-						}
+					if (parts.length === 0 && Array.isArray(snapshot.nodes)) for (const node of snapshot.nodes) collect(node);
+					if (parts.length === 0 && snapshot.chat !== void 0 && snapshot.chat.nodes !== void 0 && typeof snapshot.chat.nodes.values === "function") for (const viewNode of snapshot.chat.nodes.values()) {
+						const final = viewNode?.data?.finalNode;
+						if (final !== void 0 && final !== null) collect(final);
 					}
-					if (parts.length === 0 && snapshot.chat !== void 0 && snapshot.chat.nodes !== void 0 && typeof snapshot.chat.nodes.values === "function") for (const viewNode of snapshot.chat.nodes.values()) collectFinal(viewNode);
 				}
 				return parts.length === 0 ? null : parts.join("\n");
 			});
