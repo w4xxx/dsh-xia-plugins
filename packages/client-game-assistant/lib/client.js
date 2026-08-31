@@ -836,11 +836,17 @@ window.__ModuleLoader__.load({
 				* Question notifier: when the agent asks the owner to decide (an
 				* ask_user_question wait), chime and speak once, then keep chiming
 				* quietly until answered. No timeout — the question waits for the owner.
+				* DSH 0.1.2-alpha.1 moved pending interactions out of the per-session
+				* snapshot into the uiSession pendingInteractions map, so this subscribes
+				* that store directly instead of a slot-injected session hook.
 				*/
 				function QuestionNotifier(props) {
-					const pendingKey = props.useSession((snapshot) => {
-						const keys = (snapshot === null || snapshot === void 0 ? [] : snapshot.pending ?? []).filter((p) => p.kind === "question").map((p) => String(p.key));
-						return keys.length === 0 ? null : keys.join(",");
+					const sessionId = props.session?.sessionId;
+					const pendingKey = react.default.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
+						const map = ctx.uiSession.pendingInteractions.getSnapshot();
+						if (map === void 0 || map === null || sessionId === void 0) return null;
+						const entry = map.get(sessionId);
+						return entry !== void 0 && entry !== null && entry.kind === "question" ? String(entry.key) : null;
 					});
 					const pending = pendingKey !== null;
 					const timers = react.default.useRef({ reminded: /* @__PURE__ */ new Set() });
@@ -869,41 +875,40 @@ window.__ModuleLoader__.load({
 				}
 				/**
 				* Answer-done notifier: when a full turn settles (the agent finished
-				* answering), chime and speak once. A turn is considered done when the
-				* completed-turn counter grows after the session was observed running
-				* (any time this round — the running flag and the turn counter may land
-				* in different snapshots). History replay never fires: it grows the
-				* counter while the session is idle, and a session switch resets the
-				* baseline.
+				* answering), chime and speak once. DSH 0.1.2-alpha.1 exposes session
+				* activity through the sessions list store (`running` + `updatedAt`);
+				* a turn is considered done when the session flips from running to idle
+				* and its updatedAt moved — history replay never fires because it never
+				* flips running, and a session switch resets the baseline.
 				*/
 				function AnswerDoneNotifier(props) {
-					const turnSignal = props.useSession((snapshot) => {
-						const s = snapshot === null || snapshot === void 0 ? void 0 : snapshot;
-						if (s === void 0 || !(s.turnEnds instanceof Map)) return "0:0";
-						let latest = 0;
-						for (const turn of s.turnEnds.keys()) if (turn > latest) latest = turn;
-						return latest + ":" + (s.running === true ? 1 : 0);
+					const sessionId = props.session?.sessionId;
+					const signal = react.default.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
+						const state = ctx.sessions.list.getSnapshot();
+						const summary = state === void 0 || state === null || sessionId === void 0 ? void 0 : state.byId?.[sessionId];
+						if (summary === void 0 || summary === null) return "0:0";
+						return (summary.running === true ? 1 : 0) + ":" + (summary.updatedAt ?? 0);
 					});
 					const prev = react.default.useRef(null);
 					const seenRunning = react.default.useRef(false);
 					react.default.useEffect(() => {
 						prev.current = null;
 						seenRunning.current = false;
-					}, [props.sessionId]);
+					}, [props.session?.sessionId]);
 					react.default.useEffect(() => {
-						const current = turnSignal;
+						const current = signal;
 						const was = prev.current;
 						prev.current = current;
 						if (was === null || was === current) return;
-						const [prevTurns, prevRunning] = was.split(":");
-						const [curTurns, curRunning] = current.split(":");
+						const [prevRunning, prevStamp] = was.split(":");
+						const [curRunning, curStamp] = current.split(":");
 						if (prevRunning === "1" || curRunning === "1") seenRunning.current = true;
-						if (seenRunning.current && Number(curTurns) > Number(prevTurns)) {
+						if (seenRunning.current && curRunning === "0" && prevRunning === "1" && Number(curStamp) !== Number(prevStamp)) {
 							seenRunning.current = false;
 							playChime();
 							speakText("主人，回答完成啦～");
 						}
-					}, [turnSignal]);
+					}, [signal]);
 					return null;
 				}
 				/**
@@ -917,7 +922,8 @@ window.__ModuleLoader__.load({
 					const jobs = react.default.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
 						const state = ctx.sessions.list.getSnapshot();
 						const bySession = state === void 0 || state === null ? void 0 : state.jobsBySession;
-						return bySession === void 0 || bySession === null ? null : bySession[props.sessionId] ?? null;
+						const sessionId = props.session?.sessionId;
+						return bySession === void 0 || bySession === null || sessionId === void 0 ? null : bySession[sessionId] ?? null;
 					});
 					const announced = react.default.useRef(/* @__PURE__ */ new Set());
 					react.default.useEffect(() => {
@@ -938,9 +944,12 @@ window.__ModuleLoader__.load({
 				* speak; after APPROVAL_TIMEOUT_MS without an answer, stop the turn.
 				*/
 				function ApprovalNotifier(props) {
-					const pendingKey = props.useSession((snapshot) => {
-						const keys = (snapshot === null || snapshot === void 0 ? [] : snapshot.pending ?? []).filter((p) => p.kind === "approval").map((p) => String(p.key));
-						return keys.length === 0 ? null : keys.join(",");
+					const sessionId = props.session?.sessionId;
+					const pendingKey = react.default.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
+						const map = ctx.uiSession.pendingInteractions.getSnapshot();
+						if (map === void 0 || map === null || sessionId === void 0) return null;
+						const entry = map.get(sessionId);
+						return entry !== void 0 && entry !== null && entry.kind === "approval" ? String(entry.key) : null;
 					});
 					const pending = pendingKey !== null;
 					const timers = react.default.useRef({ reminded: /* @__PURE__ */ new Set() });
@@ -970,7 +979,7 @@ window.__ModuleLoader__.load({
 						if (timers.current.remind === void 0) timers.current.remind = window.setInterval(playChime, APPROVAL_REMIND_MS);
 						if (timers.current.stop === void 0) timers.current.stop = window.setTimeout(() => {
 							timers.current.stop = void 0;
-							stopTurn(props.sessionId);
+							stopTurn(sessionId);
 						}, APPROVAL_TIMEOUT_MS);
 					}, [pending, pendingKey]);
 					if (!pending) return null;

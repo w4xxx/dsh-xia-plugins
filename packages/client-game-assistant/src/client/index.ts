@@ -794,13 +794,21 @@ export function apply(ctx: any): void {
      * Question notifier: when the agent asks the owner to decide (an
      * ask_user_question wait), chime and speak once, then keep chiming
      * quietly until answered. No timeout — the question waits for the owner.
+     * DSH 0.1.2-alpha.1 moved pending interactions out of the per-session
+     * snapshot into the uiSession pendingInteractions map, so this subscribes
+     * that store directly instead of a slot-injected session hook.
      */
     function QuestionNotifier(props: any): any {
-      const pendingKey = props.useSession((snapshot: any) => {
-        const list = snapshot === null || snapshot === undefined ? [] : snapshot.pending ?? []
-        const keys = list.filter((p: any) => p.kind === 'question').map((p: any) => String(p.key))
-        return keys.length === 0 ? null : keys.join(',')
-      })
+      const sessionId = props.session?.sessionId
+      const pendingKey = React.useSyncExternalStore(
+        (listener: () => void) => ctx.uiSession.pendingInteractions.subscribe(listener),
+        () => {
+          const map = ctx.uiSession.pendingInteractions.getSnapshot()
+          if (map === undefined || map === null || sessionId === undefined) return null
+          const entry = map.get(sessionId)
+          return entry !== undefined && entry !== null && entry.kind === 'question' ? String(entry.key) : null
+        },
+      )
       const pending = pendingKey !== null
       const timers = React.useRef<{ reminded: Set<string>; remind?: number | undefined }>({ reminded: new Set<string>() })
       React.useEffect(() => () => {
@@ -830,42 +838,44 @@ export function apply(ctx: any): void {
 
     /**
      * Answer-done notifier: when a full turn settles (the agent finished
-     * answering), chime and speak once. A turn is considered done when the
-     * completed-turn counter grows after the session was observed running
-     * (any time this round — the running flag and the turn counter may land
-     * in different snapshots). History replay never fires: it grows the
-     * counter while the session is idle, and a session switch resets the
-     * baseline.
+     * answering), chime and speak once. DSH 0.1.2-alpha.1 exposes session
+     * activity through the sessions list store (`running` + `updatedAt`);
+     * a turn is considered done when the session flips from running to idle
+     * and its updatedAt moved — history replay never fires because it never
+     * flips running, and a session switch resets the baseline.
      */
     function AnswerDoneNotifier(props: any): any {
-      const turnSignal = props.useSession((snapshot: any) => {
-        const s = snapshot === null || snapshot === undefined ? undefined : snapshot
-        if (s === undefined || !(s.turnEnds instanceof Map)) return '0:0'
-        let latest = 0
-        for (const turn of s.turnEnds.keys()) if (turn > latest) latest = turn
-        return latest + ':' + (s.running === true ? 1 : 0)
-      })
+      const sessionId = props.session?.sessionId
+      const signal = React.useSyncExternalStore(
+        (listener: () => void) => ctx.sessions.list.subscribe(listener),
+        () => {
+          const state = ctx.sessions.list.getSnapshot()
+          const summary = state === undefined || state === null || sessionId === undefined ? undefined : state.byId?.[sessionId]
+          if (summary === undefined || summary === null) return '0:0'
+          return (summary.running === true ? 1 : 0) + ':' + (summary.updatedAt ?? 0)
+        },
+      )
       const prev = React.useRef<string | null>(null)
       const seenRunning = React.useRef(false)
       React.useEffect(() => {
         // A different session gets a fresh baseline (no cross-session fire).
         prev.current = null
         seenRunning.current = false
-      }, [props.sessionId])
+      }, [props.session?.sessionId])
       React.useEffect(() => {
-        const current = turnSignal
+        const current = signal
         const was = prev.current
         prev.current = current
         if (was === null || was === current) return
-        const [prevTurns, prevRunning] = was.split(':')
-        const [curTurns, curRunning] = current.split(':')
+        const [prevRunning, prevStamp] = was.split(':')
+        const [curRunning, curStamp] = current.split(':')
         if (prevRunning === '1' || curRunning === '1') seenRunning.current = true
-        if (seenRunning.current && Number(curTurns) > Number(prevTurns)) {
+        if (seenRunning.current && curRunning === '0' && prevRunning === '1' && Number(curStamp) !== Number(prevStamp)) {
           seenRunning.current = false
           playChime()
           void speakText('主人，回答完成啦～')
         }
-      }, [turnSignal])
+      }, [signal])
       return null
     }
 
@@ -882,7 +892,8 @@ export function apply(ctx: any): void {
         () => {
           const state = ctx.sessions.list.getSnapshot()
           const bySession = state === undefined || state === null ? undefined : state.jobsBySession
-          return bySession === undefined || bySession === null ? null : (bySession[props.sessionId] ?? null)
+          const sessionId = props.session?.sessionId
+          return bySession === undefined || bySession === null || sessionId === undefined ? null : (bySession[sessionId] ?? null)
         },
       )
       const announced = React.useRef<Set<string>>(new Set<string>())
@@ -910,11 +921,16 @@ export function apply(ctx: any): void {
      * speak; after APPROVAL_TIMEOUT_MS without an answer, stop the turn.
      */
     function ApprovalNotifier(props: any): any {
-      const pendingKey = props.useSession((snapshot: any) => {
-        const list = snapshot === null || snapshot === undefined ? [] : snapshot.pending ?? []
-        const keys = list.filter((p: any) => p.kind === 'approval').map((p: any) => String(p.key))
-        return keys.length === 0 ? null : keys.join(',')
-      })
+      const sessionId = props.session?.sessionId
+      const pendingKey = React.useSyncExternalStore(
+        (listener: () => void) => ctx.uiSession.pendingInteractions.subscribe(listener),
+        () => {
+          const map = ctx.uiSession.pendingInteractions.getSnapshot()
+          if (map === undefined || map === null || sessionId === undefined) return null
+          const entry = map.get(sessionId)
+          return entry !== undefined && entry !== null && entry.kind === 'approval' ? String(entry.key) : null
+        },
+      )
       const pending = pendingKey !== null
       const timers = React.useRef<{ reminded: Set<string>; remind?: number | undefined; stop?: number | undefined }>({ reminded: new Set<string>() })
       React.useEffect(() => () => {
@@ -940,7 +956,7 @@ export function apply(ctx: any): void {
         if (timers.current.stop === undefined) {
           timers.current.stop = window.setTimeout(() => {
             timers.current.stop = undefined
-            void stopTurn(props.sessionId)
+            void stopTurn(sessionId)
           }, APPROVAL_TIMEOUT_MS)
         }
       }, [pending, pendingKey])
