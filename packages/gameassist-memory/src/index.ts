@@ -215,6 +215,14 @@ export function applyMemoryUpdate(previous: Memory, args: MemoryUpdateArgs): Mem
   return next
 }
 
+/** Fixed guidance appended to the injected memory section. */
+export const RECORD_INSTRUCTION = [
+  '记忆只放状态：任务/作品用一句话记清「当前进度 + 下一步」；',
+  '开发日志、逐日变更、踩坑细节一律写入知识库或项目文档，不要塞进记忆；',
+  '同一条任务更新状态时用 memory_update 改原有条目，不要新建重复条目。',
+  '发现主人新的兴趣、喜好、任务或作品时，主动调用 memory_update 工具记录；任务状态变化时及时更新。',
+].join('')
+
 /**
  * Register the memory section and tools. The bank loads once at apply time;
  * the section re-registers after every update so the next steps see fresh
@@ -245,7 +253,7 @@ export function apply(ctx: any, config: Config): void {
         '【主人记忆 · 持久化】以下是从记忆库读取的主人信息，请在对话中主动参考：',
         summary,
         ...(truncated ? ['（长文本已按配置截断，完整内容可随时调用 memory_read 工具查看）'] : []),
-        '发现主人新的兴趣、喜好、任务或作品时，主动调用 memory_update 工具记录；任务状态变化时及时更新。',
+        RECORD_INSTRUCTION,
       ].join('\n'),
     })
   }
@@ -282,7 +290,7 @@ export function apply(ctx: any, config: Config): void {
     })
     const disposeUpdate = ctx.tools.register({
       name: 'memory_update',
-      description: 'Update the persistent memory bank: set interests/preferences (comma-separated strings, replace whole list), notes, upsert a task or a work, or remove one by id. Call it whenever you learn something worth remembering.',
+      description: 'Update the persistent memory bank: set interests/preferences (comma-separated strings, replace whole list), notes, upsert a task or a work, or remove one by id. Best practice: keep notes to one line of current state plus next step; put development logs and daily change details into the knowledge base or project docs, not here; update the existing task by its id instead of creating duplicates.',
       parameters: {
         type: 'object',
         properties: {

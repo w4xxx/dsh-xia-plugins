@@ -14,6 +14,16 @@
 - Plugin disposal removes the prompt section and both tools.
 - The plugin requires the Cordis services `systemPrompt` and `tools`.
 
+## Memory hygiene contract
+
+The plugin injects a fixed contract into the system prompt to keep the memory bank lean and maintainable:
+
+- **Memory holds state only**: each task/work keeps one line of "current progress + next step"; daily development logs, change details, and pitfalls belong in the knowledge base or project docs, not in memory.
+- **Update, don't duplicate**: when a task's status changes, update the existing entry by its `taskId` instead of creating a same-named task repeatedly (otherwise the bank bloats and injected token cost grows).
+- **Truncation as a safety net**: even if long text piles up in the bank, the injected summary is clipped by `maxNoteChars`/`maxSummaryChars`, and `memory_read` always returns the full content.
+
+The same contract lives in the `memory_update` tool description, so the assistant sees it on every call.
+
 ## Configuration and integration
 
 Config fields:

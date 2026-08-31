@@ -98,6 +98,8 @@ export declare function clipText(text: string, max: number | undefined): string;
 export declare function renderMemory(memory: Memory, options?: RenderOptions): string;
 /** Apply one `memory_update` argument set to a bank, returning a new bank. */
 export declare function applyMemoryUpdate(previous: Memory, args: MemoryUpdateArgs): Memory;
+/** Fixed guidance appended to the injected memory section. */
+export declare const RECORD_INSTRUCTION: string;
 /**
  * Register the memory section and tools. The bank loads once at apply time;
  * the section re-registers after every update so the next steps see fresh

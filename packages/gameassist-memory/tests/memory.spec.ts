@@ -3,7 +3,7 @@
  * upsert semantics.
  */
 import { describe, expect, it } from 'vitest'
-import { applyMemoryUpdate, clipText, EMPTY_MEMORY, renderMemory, splitList } from '../src/index.ts'
+import { applyMemoryUpdate, clipText, EMPTY_MEMORY, RECORD_INSTRUCTION, renderMemory, splitList } from '../src/index.ts'
 
 describe('gameassist-memory', () => {
   it('splitList splits and trims', () => {
@@ -81,5 +81,12 @@ describe('gameassist-memory', () => {
     const memory = applyMemoryUpdate(EMPTY_MEMORY, { taskTitle: '任务', taskNotes: '很长很长的备注' })
     expect(renderMemory(memory, { maxNoteChars: 200 })).toContain('很长很长的备注')
     expect(renderMemory(memory, {})).toContain('很长很长的备注')
+  })
+
+  it('record instruction keeps the memory-hygiene contract', () => {
+    expect(RECORD_INSTRUCTION).toContain('记忆只放状态')
+    expect(RECORD_INSTRUCTION).toContain('知识库')
+    expect(RECORD_INSTRUCTION).toContain('不要新建重复条目')
+    expect(RECORD_INSTRUCTION).toContain('memory_update')
   })
 })
