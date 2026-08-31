@@ -14,7 +14,7 @@ const OVERLAY = 'shell.overlay'
 
 describe('game-assistant client apply', () => {
   it('declares theme and slots', () => {
-    expect(inject).toEqual(['theme', 'slots', 'sessions'])
+    expect(inject).toEqual(['theme', 'slots', 'sessions', 'uiSession'])
   })
 
   it('stacks the permanent token layer and registers both entries; dispose removes them', async () => {
@@ -26,13 +26,19 @@ describe('game-assistant client apply', () => {
         layers.push({ source, tokens })
         return () => {}
       },
-    })
+    })
     ctx.provide('sessions', {
       list: {
         subscribe: () => () => {},
         getSnapshot: () => ({ jobsBySession: {} }),
       },
       binding: () => undefined,
+    })
+    ctx.provide('uiSession', {
+      pendingInteractions: {
+        subscribe: () => () => {},
+        getSnapshot: () => new Map(),
+      },
     })
     const slots = ctx.get('slots') as SlotRegistry
     const declare = slots.register({

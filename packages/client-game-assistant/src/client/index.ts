@@ -760,8 +760,8 @@ function UserReadAloudAction(props: any): any {
   }, glyph)
 }
 
-/** Hard dependencies: theme, slot registry, and the sessions service (turn stop). */
-export const inject = ['theme', 'slots', 'sessions']
+/** Hard dependencies: theme, slot registry, the sessions service (turn stop), and the ui-session pending-interaction store. */
+export const inject = ['theme', 'slots', 'sessions', 'uiSession']
 
 /** Client plugin body: permanent token layer + dock charm + petal overlay. */
 export function apply(ctx: any): void {

@@ -799,11 +799,12 @@ window.__ModuleLoader__.load({
 				onClick
 			}, glyph);
 		}
-		/** Hard dependencies: theme, slot registry, and the sessions service (turn stop). */
+		/** Hard dependencies: theme, slot registry, the sessions service (turn stop), and the ui-session pending-interaction store. */
 		const inject = [
 			"theme",
 			"slots",
-			"sessions"
+			"sessions",
+			"uiSession"
 		];
 		/** Client plugin body: permanent token layer + dock charm + petal overlay. */
 		function apply(ctx) {
