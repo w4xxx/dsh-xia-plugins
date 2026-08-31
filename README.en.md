@@ -79,8 +79,10 @@ dsh-xia-plugins/
 
 - Source distribution only: none of the six packages is published to npm yet;
 - Package names use the `@w4xxx` scope (the `@deepseek-ai` scope is not publishable by this project);
-- Cards ship **only fictional original examples** (`packages/gameassist-roster/cards/xia.example.json`); no real-work characters are distributed;
-- Visuals (petals, chimes) are pure CSS / Web Audio synthesis — no fonts, images, or recordings are bundled.
+- Every package declares a `dsh.bundle` manifest plus `cordis.patch.yml`, so it is installable via `dsh plugin add` (monorepo subpackages referenced as `owner/repo#packages/<dir>`);
+- Cards ship **only fictional original examples** (the assistant "Xia" plus the "Ultimate" studio squad: Hoshimi Mio, Hanabishi Tsumugi, Kujo Rei, Himuro Yuki — five cards under `packages/gameassist-roster/cards/`); no real-work characters are distributed;
+- Visuals (petals, chimes) are pure CSS / Web Audio synthesis — no fonts, images, or recordings are bundled;
+- Community catalog: six entries are prepared per the [awesome-dsh-plugin contributing guide](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md); the PR will be submitted once the repo is 1 day old (10+ commits already met).
 
 ## License
 

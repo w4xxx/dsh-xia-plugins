@@ -79,8 +79,10 @@ dsh-xia-plugins/
 
 - 本仓库当前为**源码分发**，6 个包尚未发布到 npm；
 - 包名沿用 `@w4xxx` 自有 scope（DSH 官方 `@deepseek-ai` 无发布权）；
-- 角色卡仅含**虚构原创示例**（`packages/gameassist-roster/cards/xia.example.json`），不包含任何真实作品角色；
-- 视觉元素（花瓣、铃声）为纯 CSS / Web Audio 合成，不含字体、图片或录音资产。
+- 每个包已声明 `dsh.bundle` manifest 与 `cordis.patch.yml`，可通过 `dsh plugin add` 安装（monorepo 子包按 `owner/repo#packages/<dir>` 引用）；
+- 角色卡仅含**虚构原创示例**（助手「小夏」+ 「超高校级」工作室：美术·星见澪、剧本·花菱紬、程序·九条零、数值·冰室雪，共 5 张，位于 `packages/gameassist-roster/cards/`），不包含任何真实作品角色；
+- 视觉元素（花瓣、铃声）为纯 CSS / Web Audio 合成，不含字体、图片或录音资产；
+- 社区目录收录：6 个条目已按 [awesome-dsh-plugin 规范](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md) 准备，待仓库满 1 天（≥10 commits 已达成）后提交 PR。
 
 ## 许可证
 
