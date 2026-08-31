@@ -851,8 +851,8 @@ export function apply(ctx: any): void {
         () => {
           const state = ctx.sessions.list.getSnapshot()
           const summary = state === undefined || state === null || sessionId === undefined ? undefined : state.byId?.[sessionId]
-          if (summary === undefined || summary === null) return '0:0'
-          return (summary.running === true ? 1 : 0) + ':' + (summary.updatedAt ?? 0)
+          if (summary === undefined || summary === null) return '0'
+          return summary.running === true ? '1' : '0'
         },
       )
       const prev = React.useRef<string | null>(null)
@@ -867,10 +867,12 @@ export function apply(ctx: any): void {
         const was = prev.current
         prev.current = current
         if (was === null || was === current) return
-        const [prevRunning, prevStamp] = was.split(':')
-        const [curRunning, curStamp] = current.split(':')
-        if (prevRunning === '1' || curRunning === '1') seenRunning.current = true
-        if (seenRunning.current && curRunning === '0' && prevRunning === '1' && Number(curStamp) !== Number(prevStamp)) {
+        if (was === '1' || current === '1') seenRunning.current = true
+        // Fire on the running → idle falling edge. `updatedAt` is not reliable
+        // here: it can advance mid-answer (content streaming) and stay put on
+        // the final flip, so the edge alone is the signal. History replay never
+        // fires because it never flips running.
+        if (seenRunning.current && was === '1' && current === '0') {
           seenRunning.current = false
           playChime()
           void speakText('主人，回答完成啦～')

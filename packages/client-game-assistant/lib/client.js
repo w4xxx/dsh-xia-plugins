@@ -887,8 +887,8 @@ window.__ModuleLoader__.load({
 					const signal = react.default.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
 						const state = ctx.sessions.list.getSnapshot();
 						const summary = state === void 0 || state === null || sessionId === void 0 ? void 0 : state.byId?.[sessionId];
-						if (summary === void 0 || summary === null) return "0:0";
-						return (summary.running === true ? 1 : 0) + ":" + (summary.updatedAt ?? 0);
+						if (summary === void 0 || summary === null) return "0";
+						return summary.running === true ? "1" : "0";
 					});
 					const prev = react.default.useRef(null);
 					const seenRunning = react.default.useRef(false);
@@ -901,10 +901,8 @@ window.__ModuleLoader__.load({
 						const was = prev.current;
 						prev.current = current;
 						if (was === null || was === current) return;
-						const [prevRunning, prevStamp] = was.split(":");
-						const [curRunning, curStamp] = current.split(":");
-						if (prevRunning === "1" || curRunning === "1") seenRunning.current = true;
-						if (seenRunning.current && curRunning === "0" && prevRunning === "1" && Number(curStamp) !== Number(prevStamp)) {
+						if (was === "1" || current === "1") seenRunning.current = true;
+						if (seenRunning.current && was === "1" && current === "0") {
 							seenRunning.current = false;
 							playChime();
 							speakText("主人，回答完成啦～");
