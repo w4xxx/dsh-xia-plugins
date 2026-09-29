@@ -68,23 +68,58 @@ function playChime() {
 }
 /** localStorage key for the voice preference (browser-local by design: voices are per machine). */
 const VOICE_STORAGE_KEY = 'dsh.gameassist.voice.v1';
+/** Xiaomi MiMo built-in voice presets (mimo-v2.5-tts). */
+export const MIMO_VOICES = ['冰糖', '茉莉', '苏打', '白桦', 'Mia', 'Chloe', 'Milo', 'Dean'];
+/** Volcengine Doubao voice_type presets verified for `seed-tts-2.0` (2026-09-01, resource id must match). */
+export const DOUBAO_VOICES = [
+    { id: 'zh_female_vv_uranus_bigtts', label: 'vivi 2.0（女声）' },
+    { id: 'zh_female_xiaohe_uranus_bigtts', label: '小何（女声）' },
+    { id: 'zh_male_m191_uranus_bigtts', label: '云舟（男声）' },
+    { id: 'zh_male_taocheng_uranus_bigtts', label: '小天（男声）' },
+];
+const DEFAULT_VOICE_PREF = {
+    voiceURI: null,
+    voiceName: '',
+    rate: 1.1,
+    pitch: 1.1,
+    endpoint: '',
+    provider: 'browser',
+    mimoVoice: '冰糖',
+    mimoFormat: 'mp3',
+    doubaoVoice: 'zh_female_vv_uranus_bigtts',
+    doubaoFormat: 'mp3',
+    doubaoSampleRate: 24000,
+    doubaoSpeechRate: 0,
+    doubaoPitchRate: 0,
+    doubaoLoudnessRate: 0,
+};
 /** Read the persisted voice preference with bounds-guards and a safe default. */
 function loadVoicePref() {
     try {
         const raw = window.localStorage.getItem(VOICE_STORAGE_KEY);
         if (raw === null)
-            return { voiceURI: null, voiceName: '', rate: 1.1, pitch: 1.1, endpoint: '' };
+            return { ...DEFAULT_VOICE_PREF };
         const parsed = JSON.parse(raw);
+        const provider = parsed.provider === 'mimo' || parsed.provider === 'doubao' || parsed.provider === 'endpoint' ? parsed.provider : 'browser';
         return {
             voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : null,
             voiceName: typeof parsed.voiceName === 'string' ? parsed.voiceName : '',
             rate: typeof parsed.rate === 'number' && parsed.rate >= 0.5 && parsed.rate <= 2 ? parsed.rate : 1.1,
             pitch: typeof parsed.pitch === 'number' && parsed.pitch >= 0.5 && parsed.pitch <= 2 ? parsed.pitch : 1.1,
             endpoint: typeof parsed.endpoint === 'string' ? parsed.endpoint : '',
+            provider,
+            mimoVoice: typeof parsed.mimoVoice === 'string' && parsed.mimoVoice !== '' ? parsed.mimoVoice : DEFAULT_VOICE_PREF.mimoVoice,
+            mimoFormat: parsed.mimoFormat === 'wav' || parsed.mimoFormat === 'pcm' ? parsed.mimoFormat : 'mp3',
+            doubaoVoice: typeof parsed.doubaoVoice === 'string' && parsed.doubaoVoice !== '' ? parsed.doubaoVoice : DEFAULT_VOICE_PREF.doubaoVoice,
+            doubaoFormat: parsed.doubaoFormat === 'pcm' || parsed.doubaoFormat === 'ogg_opus' ? parsed.doubaoFormat : 'mp3',
+            doubaoSampleRate: typeof parsed.doubaoSampleRate === 'number' && [8000, 16000, 22050, 24000, 32000, 44100, 48000].includes(parsed.doubaoSampleRate) ? parsed.doubaoSampleRate : 24000,
+            doubaoSpeechRate: typeof parsed.doubaoSpeechRate === 'number' && parsed.doubaoSpeechRate >= -50 && parsed.doubaoSpeechRate <= 100 ? parsed.doubaoSpeechRate : 0,
+            doubaoPitchRate: typeof parsed.doubaoPitchRate === 'number' && parsed.doubaoPitchRate >= -12 && parsed.doubaoPitchRate <= 12 ? parsed.doubaoPitchRate : 0,
+            doubaoLoudnessRate: typeof parsed.doubaoLoudnessRate === 'number' && parsed.doubaoLoudnessRate >= -50 && parsed.doubaoLoudnessRate <= 100 ? parsed.doubaoLoudnessRate : 0,
         };
     }
     catch {
-        return { voiceURI: null, voiceName: '', rate: 1.1, pitch: 1.1, endpoint: '' };
+        return { ...DEFAULT_VOICE_PREF };
     }
 }
 /** Persist the voice preference (best effort — private mode may refuse). */
@@ -144,6 +179,13 @@ let voiceMap = null;
  * `voiceschanged`, so per-click matching never races the async load.
  */
 let cachedVoices = [];
+/** Currently-playing browser Audio element from a cloud-TTS call, for the stop path. */
+let activeCloudAudio = null;
+/** AbortController for the in-flight cloud-TTS fetch, so a second click cancels it. */
+let activeCloudController = null;
+/** Injected settings scope for the host-held `gameassist-tts` cloud-TTS keys. */
+let ttsScope = null;
+const TTS_NAMESPACE = 'gameassist-tts';
 function refreshCachedVoices() {
     try {
         const synth = window.speechSynthesis;
@@ -183,14 +225,108 @@ async function waitForVoices(timeoutMs = 1000) {
     }
 }
 /**
+ * Ensure the module-level `voiceMap` is loaded. The host registers
+ * `/gameassist/voice-map` asynchronously (after the roster plugin reads its
+ * cards from disk), so a page opened right after a host restart can hit 404
+ * on the first fetch and — with a one-shot fetch — permanently lose today's
+ * character voice. This fetches with bounded exponential backoff until the
+ * route answers, guarded by a single-flight lock so parallel callers share
+ * one request chain.
+ */
+let voiceMapLoading = null;
+function ensureVoiceMap() {
+    if (voiceMap !== null)
+        return Promise.resolve(voiceMap);
+    if (voiceMapLoading !== null)
+        return voiceMapLoading;
+    const fetchOnce = async () => {
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const response = await fetch('/gameassist/voice-map', { cache: 'no-cache' });
+                if (!response.ok)
+                    throw new Error(`voice-map status ${response.status}`);
+                const map = await response.json();
+                voiceMap = map;
+                return map;
+            }
+            catch {
+                // Route not ready yet — wait with backoff (300ms, 600ms, 1.2s, 2.4s)
+                await new Promise((resolve) => window.setTimeout(resolve, 300 * 2 ** attempt));
+            }
+        }
+        return voiceMap;
+    };
+    voiceMapLoading = fetchOnce().finally(() => { voiceMapLoading = null; });
+    return voiceMapLoading;
+}
+/**
  * Shared TTS speaker. Priority: a configured custom endpoint (open-source
  * engines like Kokoro/Piper/ChatTTS) → the day's character voice from the
  * roster map → the global voice preference → any Chinese voice → the browser
  * default.
  * @returns false when nothing could speak (callers flash 🔇).
  */
+/** Speak through a cloud provider via the same-origin `/gameassist/tts` proxy. Keys stay host-side. */
+async function speakViaCloud(pref, text, options) {
+    const controller = new AbortController();
+    activeCloudController = controller;
+    const payload = pref.provider === 'mimo'
+        ? { provider: 'mimo', text, voice: pref.mimoVoice, format: pref.mimoFormat }
+        : { provider: 'doubao', text, voice: pref.doubaoVoice, format: pref.doubaoFormat, sampleRate: pref.doubaoSampleRate, speechRate: pref.doubaoSpeechRate, pitchRate: pref.doubaoPitchRate, loudnessRate: pref.doubaoLoudnessRate };
+    let response;
+    try {
+        response = await fetch('/gameassist/tts', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+    }
+    finally {
+        if (activeCloudController === controller)
+            activeCloudController = null;
+    }
+    if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        const message = errBody?.message;
+        throw new Error(`${pref.provider} tts ${response.status}${message !== undefined ? `: ${message}` : ''}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    // MiMo TTS has no API speed/pitch param, so the 语速 slider controls the
+    // client playback rate; Doubao uses its own speech_rate (already applied host-side).
+    if (pref.provider === 'mimo')
+        audio.playbackRate = Math.min(2, Math.max(0.5, pref.rate));
+    activeCloudAudio = audio;
+    const finish = () => {
+        if (activeCloudAudio === audio)
+            activeCloudAudio = null;
+        if (activeCloudController === controller)
+            activeCloudController = null;
+        if (options?.onend !== undefined)
+            options.onend();
+        URL.revokeObjectURL(url);
+    };
+    audio.onended = finish;
+    audio.onerror = finish;
+    await audio.play();
+    const label = pref.provider === 'mimo' ? `MiMo:${pref.mimoVoice}` : `豆包:${pref.doubaoVoice}`;
+    return { ok: true, voiceName: label };
+}
 async function speakText(text, options) {
     const pref = loadVoicePref();
+    if (pref.provider === 'mimo' || pref.provider === 'doubao') {
+        try {
+            return await speakViaCloud(pref, text, options);
+        }
+        catch (error) {
+            console.log('[read-aloud] cloud tts failed:', error);
+            if (error?.name === 'AbortError')
+                return { ok: false, voiceName: '', aborted: true };
+            return { ok: false, voiceName: '' };
+        }
+    }
     if (pref.endpoint !== '') {
         try {
             const response = await fetch(pref.endpoint, {
@@ -218,6 +354,7 @@ async function speakText(text, options) {
         }
     }
     try {
+        await ensureVoiceMap();
         const synth = window.speechSynthesis;
         if (synth === undefined)
             return { ok: false, voiceName: '' };
@@ -295,6 +432,15 @@ function speakNanami() {
  */
 async function speakDefaultText(text) {
     const pref = loadVoicePref();
+    if (pref.provider === 'mimo' || pref.provider === 'doubao') {
+        try {
+            await speakViaCloud(pref, text);
+        }
+        catch (error) {
+            console.log('[read-aloud] default cloud tts failed:', error);
+        }
+        return;
+    }
     if (pref.endpoint !== '') {
         try {
             const response = await fetch(pref.endpoint, {
@@ -363,9 +509,15 @@ async function speakDefaultText(text) {
  */
 function ReadAloudAction(props) {
     const messageId = String(props.messageId);
-    const text = props.useSession((snapshot) => {
+    // DSH 0.1.2-alpha.1: session-scoped slots inject `useChat` (ChatSnapshot),
+    // not `useSession`. ChatSnapshot carries the flat ConversationNode list
+    // under `legacy.nodes`; assistant nodes there have kind 'assistant' plus
+    // messageId/blocks. Fall back to the view store and old shapes for older
+    // checkouts.
+    const useChat = props.useChat ?? props.useSession;
+    const text = useChat((snapshot) => {
         const parts = [];
-        const walk = (node) => {
+        const collect = (node) => {
             if (node === null || node === undefined || parts.length > 0)
                 return;
             if (node.kind === 'assistant' && String(node.messageId) === messageId) {
@@ -373,17 +525,31 @@ function ReadAloudAction(props) {
                     if ((block.kind === 'text' || block.type === 'text') && typeof block.text === 'string')
                         parts.push(block.text);
                 }
-                return;
             }
-            if (typeof node.node === 'object' && node.node !== null)
-                walk(node.node);
         };
         if (snapshot !== null && snapshot !== undefined) {
-            for (const node of snapshot.nodes ?? [])
-                walk(node);
+            const legacyNodes = snapshot.legacy?.nodes;
+            if (legacyNodes !== undefined) {
+                for (const node of legacyNodes)
+                    collect(node);
+            }
+            if (parts.length === 0 && snapshot.nodes !== undefined && typeof snapshot.nodes.values === 'function') {
+                for (const viewNode of snapshot.nodes.values()) {
+                    const final = viewNode?.data?.finalNode;
+                    if (final !== undefined && final !== null)
+                        collect(final);
+                }
+            }
+            if (parts.length === 0 && Array.isArray(snapshot.nodes)) {
+                for (const node of snapshot.nodes)
+                    collect(node);
+            }
             if (parts.length === 0 && snapshot.chat !== undefined && snapshot.chat.nodes !== undefined && typeof snapshot.chat.nodes.values === 'function') {
-                for (const node of snapshot.chat.nodes.values())
-                    walk(node);
+                for (const viewNode of snapshot.chat.nodes.values()) {
+                    const final = viewNode?.data?.finalNode;
+                    if (final !== undefined && final !== null)
+                        collect(final);
+                }
             }
         }
         return parts.length === 0 ? null : parts.join('\n');
@@ -409,10 +575,19 @@ function ReadAloudAction(props) {
     const onClick = async () => {
         if (notice !== null)
             return;
-        const synth = window.speechSynthesis;
-        if (synth === undefined) {
-            console.log('[read-aloud] speechSynthesis unavailable');
-            flash('🔇');
+        if (speaking) {
+            // Stop path: cancel browser synth, abort any in-flight cloud fetch, pause playback.
+            try {
+                window.speechSynthesis?.cancel();
+            }
+            catch { /* nothing */ }
+            activeCloudController?.abort();
+            activeCloudController = null;
+            if (activeCloudAudio !== null) {
+                activeCloudAudio.pause();
+                activeCloudAudio = null;
+            }
+            setSpeaking(false);
             return;
         }
         if (text === null || text === '') {
@@ -420,34 +595,32 @@ function ReadAloudAction(props) {
             flash('❌');
             return;
         }
-        if (speaking) {
-            synth.cancel();
-            setSpeaking(false);
+        const { provider } = loadVoicePref();
+        const needsBrowser = provider !== 'mimo' && provider !== 'doubao' && provider !== 'endpoint';
+        if (needsBrowser && window.speechSynthesis === undefined) {
+            console.log('[read-aloud] speechSynthesis unavailable');
+            flash('🔇');
             return;
         }
-        try {
-            const plain = text
-                .replace(/```[\s\S]*?```/g, '，代码省略，')
-                .replace(/[#>*_`~\-[\]()!|]/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-            if (plain === '') {
-                flash('❌');
-                return;
-            }
-            console.log('[read-aloud] speaking', plain.length, 'chars for message', messageId);
-            const started = await speakText(plain, { onend: () => { setSpeaking(false); } });
-            if (!started.ok) {
+        const plain = text
+            .replace(/```[\s\S]*?```/g, '，代码省略，')
+            .replace(/[#>*_`~\-[\]()!|]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (plain === '') {
+            flash('❌');
+            return;
+        }
+        console.log('[read-aloud] speaking', plain.length, 'chars for message', messageId);
+        setSpeaking(true);
+        const started = await speakText(plain, { onend: () => { setSpeaking(false); } });
+        if (!started.ok) {
+            setSpeaking(false);
+            if (!started.aborted)
                 flash('🔇');
-                return;
-            }
-            setUsedVoice(started.voiceName);
-            setSpeaking(true);
+            return;
         }
-        catch (error) {
-            console.log('[read-aloud] failed:', error);
-            flash('⚠️');
-        }
+        setUsedVoice(started.voiceName);
     };
     const glyph = notice ?? (speaking ? '⏹' : '🔊');
     const title = notice === '❌' ? '未找到消息文本'
@@ -470,6 +643,84 @@ function ReadAloudAction(props) {
  * the date) and the default voice used by every non-roster mode. Both persist
  * in localStorage and feed speakText().
  */
+/**
+ * Cloud-TTS credential editor for the host-held `gameassist-tts` namespace.
+ * Keys are written write-only (role 'secret' redacts them from responses), so
+ * the inputs start blank and a save pushes any non-empty value server-side.
+ */
+function CloudKeysPanel(props) {
+    const provider = props.provider;
+    const [ready, setReady] = React.useState(false);
+    const [mimoKey, setMimoKey] = React.useState('');
+    const [doubaoKey, setDoubaoKey] = React.useState('');
+    const [mimoBase, setMimoBase] = React.useState('https://api.xiaomimimo.com/v1');
+    const [doubaoRes, setDoubaoRes] = React.useState('seed-tts-2.0');
+    const [sampleRate, setSampleRate] = React.useState('24000');
+    const [saved, setSaved] = React.useState(false);
+    React.useEffect(() => {
+        if (ttsScope === null)
+            return;
+        const refresh = () => { setReady(ttsScope.getSnapshot().status === 'ready'); };
+        refresh();
+        const un = ttsScope.subscribe(() => refresh());
+        return () => { un(); };
+    }, []);
+    const save = async () => {
+        if (ttsScope === null)
+            return;
+        try {
+            if (provider === 'mimo') {
+                if (mimoKey.trim() !== '')
+                    await ttsScope.set('mimoApiKey', mimoKey.trim());
+                if (mimoBase.trim() !== '')
+                    await ttsScope.set('mimoBaseURL', mimoBase.trim());
+            }
+            else if (provider === 'doubao') {
+                if (doubaoKey.trim() !== '')
+                    await ttsScope.set('doubaoApiKey', doubaoKey.trim());
+                if (doubaoRes.trim() !== '')
+                    await ttsScope.set('doubaoResourceId', doubaoRes.trim());
+                if (sampleRate.trim() !== '' && !Number.isNaN(Number(sampleRate)))
+                    await ttsScope.set('doubaoSampleRate', Number(sampleRate));
+            }
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 2000);
+        }
+        catch (error) {
+            console.log('[tts] cloud keys save failed', error);
+        }
+    };
+    return React.createElement('div', { 'data-tts-ready': ready ? '1' : '0' }, React.createElement('p', { className: styles.voiceHint }, provider === 'mimo'
+        ? 'MiMo 密钥存在服务器、不返回浏览器；填好点保存即可。'
+        : '豆包密钥存在服务器、不返回浏览器；填好点保存即可。'), provider === 'mimo'
+        ? React.createElement(React.Fragment, null, React.createElement('label', { className: styles.voiceField }, 'MiMo API Key', React.createElement('input', {
+            className: styles.voiceSelect, type: 'password', placeholder: 'sk- 或 tp- 开头',
+            value: mimoKey,
+            onChange: (event) => { setMimoKey(event.target.value); },
+        })), React.createElement('label', { className: styles.voiceField }, 'MiMo 端点（可选）', React.createElement('input', {
+            className: styles.voiceSelect, type: 'text',
+            value: mimoBase,
+            onChange: (event) => { setMimoBase(event.target.value); },
+        })))
+        : null, provider === 'doubao'
+        ? React.createElement(React.Fragment, null, React.createElement('label', { className: styles.voiceField }, '豆包 API Key', React.createElement('input', {
+            className: styles.voiceSelect, type: 'password', placeholder: '控制台 API Key（UUID）',
+            value: doubaoKey,
+            onChange: (event) => { setDoubaoKey(event.target.value); },
+        })), React.createElement('label', { className: styles.voiceField }, '豆包资源 ID（可选）', React.createElement('input', {
+            className: styles.voiceSelect, type: 'text',
+            value: doubaoRes,
+            onChange: (event) => { setDoubaoRes(event.target.value); },
+        })), React.createElement('label', { className: styles.voiceField }, '豆包采样率（可选）', React.createElement('input', {
+            className: styles.voiceSelect, type: 'number',
+            value: sampleRate,
+            onChange: (event) => { setSampleRate(event.target.value); },
+        })))
+        : null, React.createElement('div', { className: styles.voiceRow }, React.createElement('button', {
+        className: styles.voiceTest, type: 'button',
+        onClick: () => { void save(); },
+    }, saved ? '已保存' : '保存密钥')));
+}
 function VoiceSettings() {
     const [voices, setVoices] = React.useState(() => {
         try {
@@ -498,17 +749,15 @@ function VoiceSettings() {
         return () => { synth.removeEventListener('voiceschanged', refresh); };
     }, []);
     // Fetch the role map fresh on mount so the page shows today's companion.
+    // ensureVoiceMap retries while the host route is still registering, so the
+    // settings page never locks onto a 404-triggered empty map.
     React.useEffect(() => {
         let cancelled = false;
-        void fetch('/gameassist/voice-map')
-            .then((response) => (response.ok ? response.json() : null))
-            .then((mapValue) => {
+        void ensureVoiceMap().then((mapValue) => {
             if (cancelled || mapValue === null)
                 return;
-            voiceMap = mapValue;
             setMap(mapValue);
-        })
-            .catch(() => { });
+        });
         return () => { cancelled = true; };
     }, []);
     const update = (next) => {
@@ -543,7 +792,59 @@ function VoiceSettings() {
     };
     const zhVoices = voices.filter((item) => item.lang.toLowerCase().startsWith('zh'));
     const listed = zhVoices.length > 0 ? zhVoices : voices;
-    return React.createElement('div', { className: styles.voicePage }, React.createElement('h3', { className: styles.voiceTitle }, '语音朗读（TTS 声音设置）'), React.createElement('p', { className: styles.voiceHint }, '浏览器朗读用的是系统语音包：想换更甜的中文声线，去 Windows 设置 → 时间和语言 → 语音，安装「中文(简体)」语音（如 Microsoft 晓晓）；用 Edge 浏览器打开本页面还能选到在线自然语音。'), React.createElement('h4', { className: styles.voiceSection }, '扮演角色（小夏模式）'), React.createElement('p', { className: styles.voiceHint }, `今天的轮值女主角：${roleName}。下面的调整只对今天有效，明天自动恢复该角色的默认预设。`), React.createElement('label', { className: styles.voiceField }, '音色', React.createElement('select', {
+    return React.createElement('div', { className: styles.voicePage }, React.createElement('h3', { className: styles.voiceTitle }, '语音朗读（TTS 声音设置）'), React.createElement('p', { className: styles.voiceHint }, '浏览器朗读用的是系统语音包：想换更甜的中文声线，去 Windows 设置 → 时间和语言 → 语音，安装「中文(简体)」语音（如 Microsoft 晓晓）；用 Edge 浏览器打开本页面还能选到在线自然语音。'), React.createElement('h4', { className: styles.voiceSection }, '朗读引擎（音源）'), React.createElement('p', { className: styles.voiceHint }, '选择朗读用的引擎。云端引擎（MiMo / 豆包）的 API Key 在「设置 → 插件配置 → 语音合成」里配置，Key 只存服务器、不进浏览器。'), React.createElement('label', { className: styles.voiceField }, '引擎', React.createElement('select', {
+        className: styles.voiceSelect,
+        value: pref.provider,
+        onChange: (event) => { update({ provider: event.target.value }); },
+    }, React.createElement('option', { value: 'browser' }, '浏览器语音（speechSynthesis）'), React.createElement('option', { value: 'endpoint' }, '自定义 TTS 端点（自托管）'), React.createElement('option', { value: 'mimo' }, '小米 MiMo（云端）'), React.createElement('option', { value: 'doubao' }, '豆包（火山引擎 · 云端）'))), pref.provider === 'mimo'
+        ? React.createElement(React.Fragment, null, React.createElement('label', { className: styles.voiceField }, '音色', React.createElement('select', {
+            className: styles.voiceSelect,
+            value: pref.mimoVoice,
+            onChange: (event) => { update({ mimoVoice: event.target.value }); },
+        }, MIMO_VOICES.map((voiceName) => React.createElement('option', { key: voiceName, value: voiceName }, voiceName)))), React.createElement('label', { className: styles.voiceField }, '音频格式', React.createElement('select', {
+            className: styles.voiceSelect,
+            value: pref.mimoFormat,
+            onChange: (event) => { update({ mimoFormat: event.target.value }); },
+        }, React.createElement('option', { value: 'mp3' }, 'MP3'), React.createElement('option', { value: 'wav' }, 'WAV'), React.createElement('option', { value: 'pcm' }, 'PCM'))))
+        : null, pref.provider === 'doubao'
+        ? React.createElement(React.Fragment, null, React.createElement('label', { className: styles.voiceField }, '音色', React.createElement('select', {
+            className: styles.voiceSelect,
+            value: DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice) ? pref.doubaoVoice : '__custom__',
+            onChange: (event) => { update({ doubaoVoice: event.target.value }); },
+        }, DOUBAO_VOICES.map((item) => React.createElement('option', { key: item.id, value: item.id }, item.label)), React.createElement('option', { value: '__custom__' }, '自定义音色 id…'))), pref.doubaoVoice !== '' && !DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice)
+            ? React.createElement('label', { className: styles.voiceField }, '自定义 voice_type', React.createElement('input', {
+                className: styles.voiceSelect,
+                type: 'text',
+                value: pref.doubaoVoice,
+                onChange: (event) => { update({ doubaoVoice: event.target.value }); },
+            }))
+            : null, React.createElement('label', { className: styles.voiceField }, '采样率', React.createElement('select', {
+            className: styles.voiceSelect,
+            value: String(pref.doubaoSampleRate),
+            onChange: (event) => { update({ doubaoSampleRate: Number(event.target.value) }); },
+        }, [8000, 16000, 22050, 24000, 32000, 44100, 48000].map((sr) => React.createElement('option', { key: sr, value: String(sr) }, `${sr} Hz`)))), React.createElement('label', { className: styles.voiceField }, `语速 ${pref.doubaoSpeechRate}`, React.createElement('input', {
+            className: styles.voiceRange, type: 'range', min: -50, max: 100, step: 1,
+            value: String(pref.doubaoSpeechRate),
+            onChange: (event) => { update({ doubaoSpeechRate: Number(event.target.value) }); },
+        })), React.createElement('label', { className: styles.voiceField }, `音调 ${pref.doubaoPitchRate}`, React.createElement('input', {
+            className: styles.voiceRange, type: 'range', min: -12, max: 12, step: 1,
+            value: String(pref.doubaoPitchRate),
+            onChange: (event) => { update({ doubaoPitchRate: Number(event.target.value) }); },
+        })), React.createElement('label', { className: styles.voiceField }, `音量 ${pref.doubaoLoudnessRate}`, React.createElement('input', {
+            className: styles.voiceRange, type: 'range', min: -50, max: 100, step: 1,
+            value: String(pref.doubaoLoudnessRate),
+            onChange: (event) => { update({ doubaoLoudnessRate: Number(event.target.value) }); },
+        })), React.createElement('p', { className: styles.voiceHint }, React.createElement('a', {
+            className: styles.voiceSelect,
+            href: '/gameassist/doubao-voices',
+            target: '_blank',
+            rel: 'noreferrer',
+        }, '📖 打开豆包音色对照表（选好后复制 voice_type 粘到上面的「自定义 voice_type」）')))
+        : null, React.createElement('div', { className: styles.voiceRow }, React.createElement('button', {
+        className: styles.voiceTest,
+        type: 'button',
+        onClick: () => { void speakDefaultText('主人，你好呀。这是当前引擎的声音，这个声线你喜欢吗？'); },
+    }, '试听当前引擎')), React.createElement(CloudKeysPanel, { provider: pref.provider }), React.createElement('h4', { className: styles.voiceSection }, '扮演角色（小夏模式）'), React.createElement('p', { className: styles.voiceHint }, `今天的轮值女主角：${roleName}。下面的调整只对今天有效，明天自动恢复该角色的默认预设。`), React.createElement('label', { className: styles.voiceField }, '音色', React.createElement('select', {
         className: styles.voiceSelect,
         value: roleURI,
         onChange: (event) => {
@@ -647,7 +948,13 @@ function UserReadAloudAction(props) {
             try {
                 window.speechSynthesis?.cancel();
             }
-            catch { /* nothing to cancel */ }
+            catch { /* nothing */ }
+            activeCloudController?.abort();
+            activeCloudController = null;
+            if (activeCloudAudio !== null) {
+                activeCloudAudio.pause();
+                activeCloudAudio = null;
+            }
             setSpeaking(false);
             return;
         }
@@ -660,13 +967,15 @@ function UserReadAloudAction(props) {
             flash('❌');
             return;
         }
+        setSpeaking(true);
         const started = await speakText(plain, { onend: () => { setSpeaking(false); } });
         if (!started.ok) {
-            flash('🔇');
+            setSpeaking(false);
+            if (!started.aborted)
+                flash('🔇');
             return;
         }
         setUsedVoice(started.voiceName);
-        setSpeaking(true);
     };
     const glyph = notice ?? (speaking ? '⏹' : '🔊');
     const title = notice === '🔇' ? '浏览器不支持语音朗读'
@@ -682,10 +991,11 @@ function UserReadAloudAction(props) {
         onClick,
     }, glyph);
 }
-/** Hard dependencies: theme, slot registry, and the sessions service (turn stop). */
-export const inject = ['theme', 'slots', 'sessions'];
+/** Hard dependencies: theme, slot registry, the sessions service (turn stop), and the ui-session pending-interaction store. */
+export const inject = ['theme', 'slots', 'sessions', 'uiSession', 'settingsScope'];
 /** Client plugin body: permanent token layer + dock charm + petal overlay. */
 export function apply(ctx) {
+    ttsScope = ctx.settingsScope.bind({ namespace: TTS_NAMESPACE });
     ctx.effect(() => ctx.theme.overrideTokens('game-assistant-permanent', SAKURA_TOKENS));
     ctx.effect(() => {
         const synth = window.speechSynthesis;
@@ -697,11 +1007,8 @@ export function apply(ctx) {
     });
     ctx.effect(() => {
         let cancelled = false;
-        void fetch('/gameassist/voice-map')
-            .then((response) => (response.ok ? response.json() : null))
-            .then((map) => { if (!cancelled && map !== null)
-            voiceMap = map; })
-            .catch(() => { });
+        void ensureVoiceMap().then((map) => { if (!cancelled && map !== null)
+            voiceMap = map; });
         return () => { cancelled = true; };
     });
     ctx.slots.inject('conversation.composer.dock', () => {
@@ -710,12 +1017,18 @@ export function apply(ctx) {
          * Question notifier: when the agent asks the owner to decide (an
          * ask_user_question wait), chime and speak once, then keep chiming
          * quietly until answered. No timeout — the question waits for the owner.
+         * DSH 0.1.2-alpha.1 moved pending interactions out of the per-session
+         * snapshot into the uiSession pendingInteractions map, so this subscribes
+         * that store directly instead of a slot-injected session hook.
          */
         function QuestionNotifier(props) {
-            const pendingKey = props.useSession((snapshot) => {
-                const list = snapshot === null || snapshot === undefined ? [] : snapshot.pending ?? [];
-                const keys = list.filter((p) => p.kind === 'question').map((p) => String(p.key));
-                return keys.length === 0 ? null : keys.join(',');
+            const sessionId = props?.sessionId ?? props?.session?.sessionId;
+            const pendingKey = React.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
+                const map = ctx.uiSession.pendingInteractions.getSnapshot();
+                if (map === undefined || map === null || sessionId === undefined)
+                    return null;
+                const entry = map.get(sessionId);
+                return entry !== undefined && entry !== null && entry.kind === 'question' ? String(entry.key) : null;
             });
             const pending = pendingKey !== null;
             const timers = React.useRef({ reminded: new Set() });
@@ -749,23 +1062,20 @@ export function apply(ctx) {
         }
         /**
          * Answer-done notifier: when a full turn settles (the agent finished
-         * answering), chime and speak once. A turn is considered done when the
-         * completed-turn counter grows after the session was observed running
-         * (any time this round — the running flag and the turn counter may land
-         * in different snapshots). History replay never fires: it grows the
-         * counter while the session is idle, and a session switch resets the
-         * baseline.
+         * answering), chime and speak once. DSH 0.1.2-alpha.1 exposes session
+         * activity through the sessions list store (`running` + `updatedAt`);
+         * a turn is considered done when the session flips from running to idle
+         * and its updatedAt moved — history replay never fires because it never
+         * flips running, and a session switch resets the baseline.
          */
         function AnswerDoneNotifier(props) {
-            const turnSignal = props.useSession((snapshot) => {
-                const s = snapshot === null || snapshot === undefined ? undefined : snapshot;
-                if (s === undefined || !(s.turnEnds instanceof Map))
-                    return '0:0';
-                let latest = 0;
-                for (const turn of s.turnEnds.keys())
-                    if (turn > latest)
-                        latest = turn;
-                return latest + ':' + (s.running === true ? 1 : 0);
+            const sessionId = props?.sessionId ?? props?.session?.sessionId;
+            const signal = React.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
+                const state = ctx.sessions.list.getSnapshot();
+                const summary = state === undefined || state === null || sessionId === undefined ? undefined : state.byId?.[sessionId];
+                if (summary === undefined || summary === null)
+                    return '0';
+                return summary.running === true ? '1' : '0';
             });
             const prev = React.useRef(null);
             const seenRunning = React.useRef(false);
@@ -773,23 +1083,25 @@ export function apply(ctx) {
                 // A different session gets a fresh baseline (no cross-session fire).
                 prev.current = null;
                 seenRunning.current = false;
-            }, [props.sessionId]);
+            }, [props?.sessionId ?? props?.session?.sessionId]);
             React.useEffect(() => {
-                const current = turnSignal;
+                const current = signal;
                 const was = prev.current;
                 prev.current = current;
                 if (was === null || was === current)
                     return;
-                const [prevTurns, prevRunning] = was.split(':');
-                const [curTurns, curRunning] = current.split(':');
-                if (prevRunning === '1' || curRunning === '1')
+                if (was === '1' || current === '1')
                     seenRunning.current = true;
-                if (seenRunning.current && Number(curTurns) > Number(prevTurns)) {
+                // Fire on the running → idle falling edge. `updatedAt` is not reliable
+                // here: it can advance mid-answer (content streaming) and stay put on
+                // the final flip, so the edge alone is the signal. History replay never
+                // fires because it never flips running.
+                if (seenRunning.current && was === '1' && current === '0') {
                     seenRunning.current = false;
                     playChime();
                     void speakText('主人，回答完成啦～');
                 }
-            }, [turnSignal]);
+            }, [signal]);
             return null;
         }
         /**
@@ -803,7 +1115,8 @@ export function apply(ctx) {
             const jobs = React.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
                 const state = ctx.sessions.list.getSnapshot();
                 const bySession = state === undefined || state === null ? undefined : state.jobsBySession;
-                return bySession === undefined || bySession === null ? null : (bySession[props.sessionId] ?? null);
+                const sessionId = props?.sessionId ?? props?.session?.sessionId;
+                return bySession === undefined || bySession === null || sessionId === undefined ? null : (bySession[sessionId] ?? null);
             });
             const announced = React.useRef(new Set());
             React.useEffect(() => {
@@ -816,12 +1129,11 @@ export function apply(ctx) {
                         continue;
                     announced.current.add(job.id);
                     playChime();
-                    const label = typeof job.label === 'string' && job.label !== '' ? job.label : (typeof job.kind === 'string' ? job.kind : '任务');
                     const line = job.status === 'completed'
-                        ? `主人，后台任务「${label}」完成啦！`
+                        ? '主人，后台任务完成啦！'
                         : job.status === 'failed'
-                            ? `主人，后台任务「${label}」失败了呢，回来看一看吧。`
-                            : `主人，后台任务「${label}」被停止了。`;
+                            ? '主人，后台任务失败了呢，回来看一看吧。'
+                            : '主人，后台任务被停止了。';
                     void speakText(line);
                 }
             }, [jobs]);
@@ -832,10 +1144,13 @@ export function apply(ctx) {
          * speak; after APPROVAL_TIMEOUT_MS without an answer, stop the turn.
          */
         function ApprovalNotifier(props) {
-            const pendingKey = props.useSession((snapshot) => {
-                const list = snapshot === null || snapshot === undefined ? [] : snapshot.pending ?? [];
-                const keys = list.filter((p) => p.kind === 'approval').map((p) => String(p.key));
-                return keys.length === 0 ? null : keys.join(',');
+            const sessionId = props?.sessionId ?? props?.session?.sessionId;
+            const pendingKey = React.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
+                const map = ctx.uiSession.pendingInteractions.getSnapshot();
+                if (map === undefined || map === null || sessionId === undefined)
+                    return null;
+                const entry = map.get(sessionId);
+                return entry !== undefined && entry !== null && entry.kind === 'approval' ? String(entry.key) : null;
             });
             const pending = pendingKey !== null;
             const timers = React.useRef({ reminded: new Set() });
@@ -871,7 +1186,7 @@ export function apply(ctx) {
                 if (timers.current.stop === undefined) {
                     timers.current.stop = window.setTimeout(() => {
                         timers.current.stop = undefined;
-                        void stopTurn(props.sessionId);
+                        void stopTurn(sessionId);
                     }, APPROVAL_TIMEOUT_MS);
                 }
             }, [pending, pendingKey]);

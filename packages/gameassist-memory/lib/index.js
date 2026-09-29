@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import z from "@deepseek-ai/schemastery";
 //#region lib/types/index.js
 /**
@@ -15,9 +16,22 @@ import z from "@deepseek-ai/schemastery";
 const name = "gameassist-memory";
 /** The registries this plugin contributes to. */
 const inject = ["systemPrompt", "tools"];
+/**
+* Default memory-bank location, resolved at load time.
+*
+* Kept under the shared Harness home rather than a per-profile directory so one
+* bank serves the CLI, Web, and desktop hosts at once — and so the plugin still
+* loads on hosts whose profile patch nobody can hand-edit.
+* @returns the absolute path of the JSON memory bank.
+*/
+function defaultMemoryFile() {
+	const fromEnv = process.env.DSH_MEMORY_FILE;
+	if (fromEnv !== void 0 && fromEnv.trim().length > 0) return resolve(fromEnv.trim());
+	return join(process.env.DSH_HOME !== void 0 && process.env.DSH_HOME.trim().length > 0 ? resolve(process.env.DSH_HOME.trim()) : join(homedir(), ".dsh"), "gameassist", "memory.json");
+}
 /** Schemastery validation for {@link Config}. */
 const Config = z.object({
-	memoryFile: z.string(),
+	memoryFile: z.string().default(defaultMemoryFile()),
 	maxNoteChars: z.number().default(200),
 	maxSummaryChars: z.number().default(120)
 });
@@ -242,4 +256,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { Config, EMPTY_MEMORY, RECORD_INSTRUCTION, apply, applyMemoryUpdate, clipText, inject, name, nowIso, renderMemory, splitList };
+export { Config, EMPTY_MEMORY, RECORD_INSTRUCTION, apply, applyMemoryUpdate, clipText, defaultMemoryFile, inject, name, nowIso, renderMemory, splitList };

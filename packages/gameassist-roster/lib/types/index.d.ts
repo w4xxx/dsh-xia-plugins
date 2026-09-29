@@ -5,18 +5,38 @@
  * keeping the Xia assistant identity. A `roster_pick` tool overrides the
  * in-session pick; every contribution is disposed with the fiber.
  *
- * @module @w4xxx/dsh-gameassist-roster
+ * @module @deepseek-ai/dsh-gameassist-roster
  */
 import z from '@deepseek-ai/schemastery';
 /** Cordis plugin name used by loader diagnostics. */
 export declare const name = "gameassist-roster";
-/** The registries this plugin contributes to. */
+/** Credentials + defaults for the `/gameassist/tts` cloud proxy (MiMo / Doubao). */
+export interface TtsSettings {
+    mimoApiKey: string;
+    mimoBaseURL: string;
+    doubaoApiKey: string;
+    doubaoResourceId: string;
+    doubaoSampleRate: number;
+}
+/**
+ * The registries this plugin contributes to.
+ *
+ * `webServer` stays optional: the Electron desktop shell ships without one, and
+ * a hard dependency there would stop the plugin from loading at all. The TTS
+ * proxy routes are registered opportunistically at runtime instead.
+ */
 export declare const inject: string[];
 /** Plugin configuration validated by the loader. */
 export interface Config {
     /** Directory holding one `*.json` character card per file. */
     cardsDir: string;
 }
+/**
+ * Default character-card directory, resolved at load time.
+ *
+ * @returns the absolute directory path, overridable with `DSH_ROSTER_CARDS_DIR`.
+ */
+export declare function defaultCardsDir(): string;
 /** Schemastery validation for {@link Config}. */
 export declare const Config: z<Config>;
 /** One character card. */

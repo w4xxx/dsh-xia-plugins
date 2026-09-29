@@ -26,14 +26,52 @@ function diag(message) {
 	} catch {}
 }
 diag("module imported");
-/** The registries this plugin contributes to. */
-const inject = [
-	"systemPrompt",
-	"tools",
-	"webServer"
-];
+/**
+* Resolve an optional `webServer` service from a host context.
+*
+* A bare property read is not safe here: cordis wraps every context in a proxy
+* whose `get` trap THROWS for a service that was never injected (the message is
+* `cannot get property "webServer" without inject`). The reflection layer's
+* non-strict lookup is the supported way to ask without demanding it, and it
+* answers `undefined` when the host has no HTTP layer — which is exactly the
+* Electron desktop shell.
+* @param ctx - the plugin context, real or a test double.
+* @returns the web server service, or undefined when this host has none.
+*/
+function resolveWebServer(ctx) {
+	const viaReflect = ctx?.reflect?.get?.("webServer", false);
+	if (viaReflect !== void 0 && viaReflect !== null) return viaReflect;
+	try {
+		return ctx?.webServer ?? void 0;
+	} catch {
+		return;
+	}
+}
+/**
+* The registries this plugin contributes to.
+*
+* `webServer` is deliberately absent: the Electron desktop shell disables its
+* HTTP layer, so a hard dependency here would stop the whole plugin — and with
+* it the `kb_*` tools — from loading there. The browser routes are instead
+* registered opportunistically at runtime (see the route effect below) whenever
+* a `webServer` happens to be present, which is the case on Web/CLI.
+*/
+const inject = ["systemPrompt", "tools"];
+/**
+* Default knowledge-base root, resolved at load time.
+*
+* A bundle patch normally carries no `config`, so this default is what makes
+* the plugin installable on hosts (notably the Electron desktop shell) where
+* nobody can hand-edit a profile patch. `DSH_KB_ROOT` wins when set, then the
+* workspace sibling `knowledge-bases` under `$E:/myaicode`-style layouts.
+*/
+function defaultKbRoot() {
+	const fromEnv = process.env.DSH_KB_ROOT;
+	if (fromEnv !== void 0 && fromEnv.trim().length > 0) return resolve(fromEnv.trim());
+	return resolve("E:/myaicode/knowledge-bases");
+}
 /** Schemastery validation for {@link Config}. */
-const Config = z.object({ kbRoot: z.string() });
+const Config = z.object({ kbRoot: z.string().default(defaultKbRoot()) });
 /** Single-node byte ceiling; larger files are skipped by tree scans. */
 const MAX_NODE_BYTES = 512 * 1024;
 /** Strip a leading UTF-8 BOM (Node keeps it in decoded strings). */
@@ -232,8 +270,13 @@ function apply(ctx, config) {
 		};
 	});
 	ctx.effect(() => {
+		const webServer = resolveWebServer(ctx);
+		if (webServer === void 0 || webServer === null) {
+			diag("no webServer on this host; browser routes skipped (kb_* tools still active)");
+			return () => {};
+		}
 		try {
-			const disposeTree = ctx.webServer.register({
+			const disposeTree = webServer.register({
 				kind: "exact",
 				path: "/gameassist/knowledge/tree",
 				handler: (_req, res) => {
@@ -253,7 +296,7 @@ function apply(ctx, config) {
 				}
 			});
 			diag("route registered: /gameassist/knowledge/tree");
-			const disposeNode = ctx.webServer.register({
+			const disposeNode = webServer.register({
 				kind: "exact",
 				path: "/gameassist/knowledge/node",
 				handler: (req, res) => {
@@ -394,4 +437,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { Config, MAX_NODE_BYTES, apply, countNodes, extractTitle, inject, name, parseKbPath, renderIndex, renderTree, resolveLibraryNode, scanDir, scanLibraries, scanLibrary, stripBom, toPosix };
+export { Config, MAX_NODE_BYTES, apply, countNodes, defaultKbRoot, extractTitle, inject, name, parseKbPath, renderIndex, renderTree, resolveLibraryNode, resolveWebServer, scanDir, scanLibraries, scanLibrary, stripBom, toPosix };

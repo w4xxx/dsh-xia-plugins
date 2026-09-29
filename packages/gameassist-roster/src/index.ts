@@ -5,18 +5,191 @@
  * keeping the Xia assistant identity. A `roster_pick` tool overrides the
  * in-session pick; every contribution is disposed with the fiber.
  *
- * @module @w4xxx/dsh-gameassist-roster
+ * @module @deepseek-ai/dsh-gameassist-roster
  */
 
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'gameassist-roster'
 
-/** The registries this plugin contributes to. */
-export const inject = ['systemPrompt', 'tools', 'webServer']
+/** Cloud-TTS proxy settings namespace, editable in DSH 设置 → 插件配置. */
+const TTS_NAMESPACE = 'gameassist-tts'
+
+/** Credentials + defaults for the `/gameassist/tts` cloud proxy (MiMo / Doubao). */
+export interface TtsSettings {
+  mimoApiKey: string
+  mimoBaseURL: string
+  doubaoApiKey: string
+  doubaoResourceId: string
+  doubaoSampleRate: number
+}
+
+const DEFAULT_TTS: TtsSettings = {
+  mimoApiKey: '',
+  mimoBaseURL: 'https://api.xiaomimimo.com/v1',
+  doubaoApiKey: '',
+  doubaoResourceId: 'seed-tts-2.0',
+  doubaoSampleRate: 24000,
+}
+
+const TtsSchema = z.object({
+  mimoApiKey: z.string().role('secret').default(''),
+  mimoBaseURL: z.string().default(DEFAULT_TTS.mimoBaseURL),
+  doubaoApiKey: z.string().role('secret').default(''),
+  doubaoResourceId: z.string().default(DEFAULT_TTS.doubaoResourceId),
+  doubaoSampleRate: z.number().default(DEFAULT_TTS.doubaoSampleRate),
+})
+
+/** Live source thunk set by installSettingsSection; falls back to defaults. */
+let currentTts: () => TtsSettings = () => DEFAULT_TTS
+
+/** Synthesize with Xiaomi MiMo (OpenAI-compatible audio-completions). */
+async function synthMimo(text: string, voice: string, format: string, apiKey: string, baseURL: string): Promise<Buffer> {
+  const effectiveBase = apiKey.trim().startsWith('tp-') ? 'https://token-plan-cn.xiaomimimo.com/v1' : baseURL
+  const endpoint = `${effectiveBase.replace(/\/+$/, '')}/chat/completions`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey.trim()}`,
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'mimo-v2.5-tts',
+      // MiMo requires the text to synthesize in an `assistant` message; a `user`
+      // message may carry reading-instruction context (mirrors the official plugin).
+      messages: [
+        { role: 'user', content: '请忠实朗读原文，根据文本语气自然表达，不添加或改写内容。' },
+        { role: 'assistant', content: text },
+      ],
+      audio: { format, voice },
+      stream: false,
+    }),
+  })
+  const parsed: any = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(`MiMo TTS HTTP ${response.status}`)
+  const audioBase64 = parsed?.choices?.[0]?.message?.audio?.data
+  if (typeof audioBase64 !== 'string' || audioBase64.length === 0) throw new Error('MiMo 响应无音频数据')
+  return Buffer.from(audioBase64, 'base64')
+}
+
+/** Synthesize with Volcengine Doubao V3 (SSE stream, base64 audio chunks). */
+async function synthDoubao(
+  text: string, voice: string, format: string, sampleRate: number,
+  speechRate: number, pitchRate: number, loudnessRate: number,
+  apiKey: string, resourceId: string,
+): Promise<Buffer> {
+  const headers = {
+    'content-type': 'application/json',
+    'x-api-resource-id': resourceId,
+    'x-api-request-id': randomUUID(),
+    'x-api-key': apiKey.trim(),
+  }
+  const audioParams: Record<string, unknown> = { format, speech_rate: speechRate, loudness_rate: loudnessRate }
+  if (format === 'mp3' || format === 'ogg_opus') audioParams.bit_rate = 64000
+  const body = {
+    user: { uid: 'dsh-gameassist' },
+    req_params: {
+      text,
+      speaker: voice,
+      sample_rate: sampleRate,
+      audio_params: audioParams,
+      additions: JSON.stringify({ post_process: { pitch: pitchRate }, disable_markdown_filter: true, enable_latex_tn: true, latex_parser: 'v2' }),
+    },
+  }
+  const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse', {
+    method: 'POST', headers, body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(`豆包 TTS HTTP ${response.status}`)
+  const sseText = await response.text()
+  const chunks: Buffer[] = []
+  for (const line of sseText.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) continue
+    let d: any
+    try { d = JSON.parse(trimmed.slice(5).trim()) } catch { continue }
+    if (d.code !== 0 && d.code !== 20000000) throw new Error(`豆包 TTS code ${d.code}: ${d.message ?? ''}`)
+    if (typeof d.data === 'string' && d.data.length > 0) chunks.push(Buffer.from(d.data, 'base64'))
+  }
+  if (chunks.length === 0) throw new Error('豆包 TTS 无音频数据')
+  return Buffer.concat(chunks)
+}
+
+function readJsonBody(req: any, max: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let size = 0
+    let done = false
+    const chunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => {
+      if (done) return
+      size += chunk.length
+      if (size > max) {
+        done = true
+        reject(new Error('request-body-too-large'))
+        req.destroy?.()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      if (done) return
+      done = true
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))) } catch (error) { reject(error) }
+    })
+    req.on('error', (error: Error) => { if (!done) { done = true; reject(error) } })
+  })
+}
+
+function json(res: any, status: number, obj: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(JSON.stringify(obj))
+}
+
+/**
+ * Register one HTTP route when the host actually serves HTTP.
+ *
+ * The Electron desktop shell ships without a `webServer`, so every route in
+ * this plugin is optional: without one the plugin still mounts its prompt
+ * section and its `roster_pick` / `roster_tts` tools, and only the browser-side
+ * conveniences (voice map, same-origin TTS proxy) are absent.
+ * @param ctx - plugin context that may or may not carry a `webServer`.
+ * @param route - the route definition forwarded verbatim when a server exists.
+ * @returns a disposer that is always safe to call.
+ */
+function registerRoute(ctx: any, route: any): () => void {
+  // A bare `ctx.webServer` read THROWS inside cordis for a service that was
+  // never injected, so ask the reflection layer for a non-strict lookup, which
+  // answers `undefined` instead of raising.
+  let webServer: any = ctx?.reflect?.get?.('webServer', false)
+  if (webServer === undefined || webServer === null) {
+    // Plain-object hosts (and test doubles) expose the service directly.
+    try {
+      webServer = ctx?.webServer
+    } catch {
+      webServer = undefined
+    }
+  }
+  if (webServer === undefined || webServer === null) return () => {}
+  try {
+    const dispose = webServer.register(route)
+    return typeof dispose === 'function' ? dispose : () => {}
+  } catch {
+    return () => {}
+  }
+}
+
+/**
+ * The registries this plugin contributes to.
+ *
+ * `webServer` stays optional: the Electron desktop shell ships without one, and
+ * a hard dependency there would stop the plugin from loading at all. The TTS
+ * proxy routes are registered opportunistically at runtime instead.
+ */
+export const inject = ['systemPrompt', 'tools']
 
 /** Plugin configuration validated by the loader. */
 export interface Config {
@@ -24,9 +197,20 @@ export interface Config {
   cardsDir: string
 }
 
+/**
+ * Default character-card directory, resolved at load time.
+ *
+ * @returns the absolute directory path, overridable with `DSH_ROSTER_CARDS_DIR`.
+ */
+export function defaultCardsDir(): string {
+  const fromEnv = process.env.DSH_ROSTER_CARDS_DIR
+  if (fromEnv !== undefined && fromEnv.trim().length > 0) return resolve(fromEnv.trim())
+  return resolve('E:/myaicode/characters')
+}
+
 /** Schemastery validation for {@link Config}. */
 export const Config: z<Config> = z.object({
-  cardsDir: z.string(),
+  cardsDir: z.string().default(defaultCardsDir()),
 })
 
 /** One character card. */
@@ -89,6 +273,15 @@ export function apply(ctx: any, config: Config): void {
   let cards: Card[] = []
   let overrideId: string | undefined
 
+  // Cloud-TTS credentials live in DSH settings (设置 → 插件配置 → gameassist-tts),
+  // never in the browser. The /gameassist/tts route reads the live value each call.
+  ctx.inject(['settings'], (settingsCtx: any) => {
+    settingsCtx.settings.installSection(ctx, TTS_NAMESPACE, TtsSchema, DEFAULT_TTS, {
+      setSource: (thunk: () => TtsSettings) => { currentTts = thunk },
+      onChange: () => { /* stateless proxy — nothing to re-register */ },
+    })
+  })
+
   const current = (): Card | undefined => {
     if (cards.length === 0) return undefined
     const id = overrideId === undefined ? pickFor(cards.map(card => card.id), localDateKey(new Date())) : overrideId
@@ -148,7 +341,7 @@ export function apply(ctx: any, config: Config): void {
   })
 
   ctx.effect(() => {
-    const disposeRoute = ctx.webServer.register({
+    const disposeRoute = registerRoute(ctx, {
       kind: 'exact',
       path: '/gameassist/voice-map',
       handler: (_req: any, res: any): void => {
@@ -160,6 +353,81 @@ export function apply(ctx: any, config: Config): void {
         const body = JSON.stringify({ today: today?.id ?? null, cardName: today?.name ?? null, voices })
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
         res.end(body)
+      },
+    })
+    return () => { disposeRoute() }
+  })
+
+  // Same-origin TTS proxy: the client POSTs provider + text + voice/params, and
+  // this route forwards to the configured cloud provider (keys stay host-side).
+  ctx.effect(() => {
+    const disposeRoute = registerRoute(ctx, {
+      kind: 'exact',
+      path: '/gameassist/tts',
+      async handler(req: any, res: any): Promise<void> {
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST')
+          json(res, 405, { error: 'method-not-allowed' })
+          return
+        }
+        let body: any
+        try {
+          body = await readJsonBody(req, 1024 * 1024)
+        } catch {
+          json(res, 400, { error: 'invalid-json' })
+          return
+        }
+        const text = typeof body.text === 'string' ? body.text.trim() : ''
+        const provider = typeof body.provider === 'string' ? body.provider : ''
+        const voice = typeof body.voice === 'string' && body.voice.trim() !== '' ? body.voice.trim() : null
+        if (text.length === 0) { json(res, 400, { error: 'text-required' }); return }
+        const tts = currentTts()
+        try {
+          let audio: Buffer
+          if (provider === 'mimo') {
+            if (tts.mimoApiKey.trim().length === 0) { json(res, 409, { error: 'mimo-api-key-not-configured' }); return }
+            audio = await synthMimo(text, voice ?? '冰糖', 'mp3', tts.mimoApiKey, tts.mimoBaseURL)
+          } else if (provider === 'doubao') {
+            if (tts.doubaoApiKey.trim().length === 0) { json(res, 409, { error: 'doubao-api-key-not-configured' }); return }
+            audio = await synthDoubao(
+              text,
+              voice ?? 'zh_female_vv_uranus_bigtts',
+              'mp3',
+              Number(body.sampleRate ?? tts.doubaoSampleRate),
+              Number(body.speechRate ?? 0),
+              Number(body.pitchRate ?? 0),
+              Number(body.loudnessRate ?? 0),
+              tts.doubaoApiKey,
+              tts.doubaoResourceId,
+            )
+          } else {
+            json(res, 400, { error: 'unsupported-provider' })
+            return
+          }
+          res.writeHead(200, { 'content-type': 'audio/mpeg', 'cache-control': 'no-cache' })
+          res.end(audio)
+        } catch (error) {
+          json(res, 502, { error: 'provider-error', message: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    })
+    return () => { disposeRoute() }
+  })
+
+  // Reference page: serve the Doubao voice-lookup HTML as a same-origin URL so the
+  // settings "朗读引擎 → 豆包 → 音色" interface can link to it in a new tab.
+  ctx.effect(() => {
+    const disposeRoute = registerRoute(ctx, {
+      kind: 'exact',
+      path: '/gameassist/doubao-voices',
+      async handler(_req: any, res: any): Promise<void> {
+        try {
+          const html = await readFile('E:/myaicode/tools/doubao-voice-finder.html', 'utf8')
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' })
+          res.end(html)
+        } catch (error) {
+          json(res, 500, { error: 'voice-page-unavailable', message: error instanceof Error ? error.message : String(error) })
+        }
       },
     })
     return () => { disposeRoute() }

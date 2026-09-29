@@ -73,30 +73,80 @@ function playChime(): void {
 /** localStorage key for the voice preference (browser-local by design: voices are per machine). */
 const VOICE_STORAGE_KEY = 'dsh.gameassist.voice.v1'
 
-/** Voice preference: chosen voice URI (null = auto-pick Chinese), name backup, rate, pitch, endpoint. */
+/** TTS engine the read-aloud pipeline speaks through. */
+export type VoiceProvider = 'browser' | 'endpoint' | 'mimo' | 'doubao'
+
+/** Xiaomi MiMo built-in voice presets (mimo-v2.5-tts). */
+export const MIMO_VOICES = ['冰糖', '茉莉', '苏打', '白桦', 'Mia', 'Chloe', 'Milo', 'Dean'] as const
+
+/** Volcengine Doubao voice_type presets verified for `seed-tts-2.0` (2026-09-01, resource id must match). */
+export const DOUBAO_VOICES: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'zh_female_vv_uranus_bigtts', label: 'vivi 2.0（女声）' },
+  { id: 'zh_female_xiaohe_uranus_bigtts', label: '小何（女声）' },
+  { id: 'zh_male_m191_uranus_bigtts', label: '云舟（男声）' },
+  { id: 'zh_male_taocheng_uranus_bigtts', label: '小天（男声）' },
+]
+
+/** Voice preference: engine + chosen voice URI (null = auto-pick Chinese), name backup, rate, pitch, endpoint. */
 interface VoicePref {
   voiceURI: string | null
   voiceName: string
   rate: number
   pitch: number
   endpoint: string
+  provider: VoiceProvider
+  mimoVoice: string
+  mimoFormat: 'mp3' | 'wav' | 'pcm'
+  doubaoVoice: string
+  doubaoFormat: 'mp3' | 'pcm' | 'ogg_opus'
+  doubaoSampleRate: number
+  doubaoSpeechRate: number
+  doubaoPitchRate: number
+  doubaoLoudnessRate: number
+}
+
+const DEFAULT_VOICE_PREF: VoicePref = {
+  voiceURI: null,
+  voiceName: '',
+  rate: 1.1,
+  pitch: 1.1,
+  endpoint: '',
+  provider: 'browser',
+  mimoVoice: '冰糖',
+  mimoFormat: 'mp3',
+  doubaoVoice: 'zh_female_vv_uranus_bigtts',
+  doubaoFormat: 'mp3',
+  doubaoSampleRate: 24000,
+  doubaoSpeechRate: 0,
+  doubaoPitchRate: 0,
+  doubaoLoudnessRate: 0,
 }
 
 /** Read the persisted voice preference with bounds-guards and a safe default. */
 function loadVoicePref(): VoicePref {
   try {
     const raw = window.localStorage.getItem(VOICE_STORAGE_KEY)
-    if (raw === null) return { voiceURI: null, voiceName: '', rate: 1.1, pitch: 1.1, endpoint: '' }
+    if (raw === null) return { ...DEFAULT_VOICE_PREF }
     const parsed = JSON.parse(raw) as Partial<VoicePref>
+    const provider = parsed.provider === 'mimo' || parsed.provider === 'doubao' || parsed.provider === 'endpoint' ? parsed.provider : 'browser'
     return {
       voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : null,
       voiceName: typeof parsed.voiceName === 'string' ? parsed.voiceName : '',
       rate: typeof parsed.rate === 'number' && parsed.rate >= 0.5 && parsed.rate <= 2 ? parsed.rate : 1.1,
       pitch: typeof parsed.pitch === 'number' && parsed.pitch >= 0.5 && parsed.pitch <= 2 ? parsed.pitch : 1.1,
       endpoint: typeof parsed.endpoint === 'string' ? parsed.endpoint : '',
+      provider,
+      mimoVoice: typeof parsed.mimoVoice === 'string' && parsed.mimoVoice !== '' ? parsed.mimoVoice : DEFAULT_VOICE_PREF.mimoVoice,
+      mimoFormat: parsed.mimoFormat === 'wav' || parsed.mimoFormat === 'pcm' ? parsed.mimoFormat : 'mp3',
+      doubaoVoice: typeof parsed.doubaoVoice === 'string' && parsed.doubaoVoice !== '' ? parsed.doubaoVoice : DEFAULT_VOICE_PREF.doubaoVoice,
+      doubaoFormat: parsed.doubaoFormat === 'pcm' || parsed.doubaoFormat === 'ogg_opus' ? parsed.doubaoFormat : 'mp3',
+      doubaoSampleRate: typeof parsed.doubaoSampleRate === 'number' && [8000, 16000, 22050, 24000, 32000, 44100, 48000].includes(parsed.doubaoSampleRate) ? parsed.doubaoSampleRate : 24000,
+      doubaoSpeechRate: typeof parsed.doubaoSpeechRate === 'number' && parsed.doubaoSpeechRate >= -50 && parsed.doubaoSpeechRate <= 100 ? parsed.doubaoSpeechRate : 0,
+      doubaoPitchRate: typeof parsed.doubaoPitchRate === 'number' && parsed.doubaoPitchRate >= -12 && parsed.doubaoPitchRate <= 12 ? parsed.doubaoPitchRate : 0,
+      doubaoLoudnessRate: typeof parsed.doubaoLoudnessRate === 'number' && parsed.doubaoLoudnessRate >= -50 && parsed.doubaoLoudnessRate <= 100 ? parsed.doubaoLoudnessRate : 0,
     }
   } catch {
-    return { voiceURI: null, voiceName: '', rate: 1.1, pitch: 1.1, endpoint: '' }
+    return { ...DEFAULT_VOICE_PREF }
   }
 }
 
@@ -165,6 +215,13 @@ let voiceMap: VoiceMap | null = null
  * `voiceschanged`, so per-click matching never races the async load.
  */
 let cachedVoices: SpeechSynthesisVoice[] = []
+/** Currently-playing browser Audio element from a cloud-TTS call, for the stop path. */
+let activeCloudAudio: HTMLAudioElement | null = null
+/** AbortController for the in-flight cloud-TTS fetch, so a second click cancels it. */
+let activeCloudController: AbortController | null = null
+/** Injected settings scope for the host-held `gameassist-tts` cloud-TTS keys. */
+let ttsScope: any = null
+const TTS_NAMESPACE = 'gameassist-tts'
 function refreshCachedVoices(): void {
   try {
     const synth = window.speechSynthesis
@@ -237,8 +294,61 @@ function ensureVoiceMap(): Promise<VoiceMap | null> {
  * default.
  * @returns false when nothing could speak (callers flash 🔇).
  */
-async function speakText(text: string, options?: { onend?: () => void }): Promise<{ ok: boolean; voiceName: string }> {
+
+/** Speak through a cloud provider via the same-origin `/gameassist/tts` proxy. Keys stay host-side. */
+async function speakViaCloud(pref: VoicePref, text: string, options?: { onend?: () => void }): Promise<{ ok: boolean; voiceName: string }> {
+  const controller = new AbortController()
+  activeCloudController = controller
+  const payload = pref.provider === 'mimo'
+    ? { provider: 'mimo', text, voice: pref.mimoVoice, format: pref.mimoFormat }
+    : { provider: 'doubao', text, voice: pref.doubaoVoice, format: pref.doubaoFormat, sampleRate: pref.doubaoSampleRate, speechRate: pref.doubaoSpeechRate, pitchRate: pref.doubaoPitchRate, loudnessRate: pref.doubaoLoudnessRate }
+  let response: Response
+  try {
+    response = await fetch('/gameassist/tts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+  } finally {
+    if (activeCloudController === controller) activeCloudController = null
+  }
+  if (!response.ok) {
+    const errBody: unknown = await response.json().catch(() => null)
+    const message = (errBody as { message?: string } | null)?.message
+    throw new Error(`${pref.provider} tts ${response.status}${message !== undefined ? `: ${message}` : ''}`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const audio = new Audio(url)
+  // MiMo TTS has no API speed/pitch param, so the 语速 slider controls the
+  // client playback rate; Doubao uses its own speech_rate (already applied host-side).
+  if (pref.provider === 'mimo') audio.playbackRate = Math.min(2, Math.max(0.5, pref.rate))
+  activeCloudAudio = audio
+  const finish = (): void => {
+    if (activeCloudAudio === audio) activeCloudAudio = null
+    if (activeCloudController === controller) activeCloudController = null
+    if (options?.onend !== undefined) options.onend()
+    URL.revokeObjectURL(url)
+  }
+  audio.onended = finish
+  audio.onerror = finish
+  await audio.play()
+  const label = pref.provider === 'mimo' ? `MiMo:${pref.mimoVoice}` : `豆包:${pref.doubaoVoice}`
+  return { ok: true, voiceName: label }
+}
+
+async function speakText(text: string, options?: { onend?: () => void }): Promise<{ ok: boolean; voiceName: string; aborted?: boolean }> {
   const pref = loadVoicePref()
+  if (pref.provider === 'mimo' || pref.provider === 'doubao') {
+    try {
+      return await speakViaCloud(pref, text, options)
+    } catch (error) {
+      console.log('[read-aloud] cloud tts failed:', error)
+      if ((error as { name?: string } | null)?.name === 'AbortError') return { ok: false, voiceName: '', aborted: true }
+      return { ok: false, voiceName: '' }
+    }
+  }
   if (pref.endpoint !== '') {
     try {
       const response = await fetch(pref.endpoint, {
@@ -333,6 +443,10 @@ function speakNanami(): void {
  */
 async function speakDefaultText(text: string): Promise<void> {
   const pref = loadVoicePref()
+  if (pref.provider === 'mimo' || pref.provider === 'doubao') {
+    try { await speakViaCloud(pref, text) } catch (error) { console.log('[read-aloud] default cloud tts failed:', error) }
+    return
+  }
   if (pref.endpoint !== '') {
     try {
       const response = await fetch(pref.endpoint, {
@@ -447,10 +561,13 @@ function ReadAloudAction(props: any): any {
   }
   const onClick = async (): Promise<void> => {
     if (notice !== null) return
-    const synth = window.speechSynthesis
-    if (synth === undefined) {
-      console.log('[read-aloud] speechSynthesis unavailable')
-      flash('🔇')
+    if (speaking) {
+      // Stop path: cancel browser synth, abort any in-flight cloud fetch, pause playback.
+      try { window.speechSynthesis?.cancel() } catch { /* nothing */ }
+      activeCloudController?.abort()
+      activeCloudController = null
+      if (activeCloudAudio !== null) { activeCloudAudio.pause(); activeCloudAudio = null }
+      setSpeaking(false)
       return
     }
     if (text === null || text === '') {
@@ -458,33 +575,31 @@ function ReadAloudAction(props: any): any {
       flash('❌')
       return
     }
-    if (speaking) {
-      synth.cancel()
-      setSpeaking(false)
+    const { provider } = loadVoicePref()
+    const needsBrowser = provider !== 'mimo' && provider !== 'doubao' && provider !== 'endpoint'
+    if (needsBrowser && window.speechSynthesis === undefined) {
+      console.log('[read-aloud] speechSynthesis unavailable')
+      flash('🔇')
       return
     }
-    try {
-      const plain = text
-        .replace(/```[\s\S]*?```/g, '，代码省略，')
-        .replace(/[#>*_`~\-[\]()!|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      if (plain === '') {
-        flash('❌')
-        return
-      }
-      console.log('[read-aloud] speaking', plain.length, 'chars for message', messageId)
-      const started = await speakText(plain, { onend: () => { setSpeaking(false) } })
-      if (!started.ok) {
-        flash('🔇')
-        return
-      }
-      setUsedVoice(started.voiceName)
-      setSpeaking(true)
-    } catch (error) {
-      console.log('[read-aloud] failed:', error)
-      flash('⚠️')
+    const plain = text
+      .replace(/```[\s\S]*?```/g, '，代码省略，')
+      .replace(/[#>*_`~\-[\]()!|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (plain === '') {
+      flash('❌')
+      return
     }
+    console.log('[read-aloud] speaking', plain.length, 'chars for message', messageId)
+    setSpeaking(true)
+    const started = await speakText(plain, { onend: () => { setSpeaking(false) } })
+    if (!started.ok) {
+      setSpeaking(false)
+      if (!started.aborted) flash('🔇')
+      return
+    }
+    setUsedVoice(started.voiceName)
   }
   const glyph = notice ?? (speaking ? '⏹' : '🔊')
   const title = notice === '❌' ? '未找到消息文本'
@@ -508,6 +623,105 @@ function ReadAloudAction(props: any): any {
  * the date) and the default voice used by every non-roster mode. Both persist
  * in localStorage and feed speakText().
  */
+
+/**
+ * Cloud-TTS credential editor for the host-held `gameassist-tts` namespace.
+ * Keys are written write-only (role 'secret' redacts them from responses), so
+ * the inputs start blank and a save pushes any non-empty value server-side.
+ */
+function CloudKeysPanel(props: { provider: VoiceProvider }): any {
+  const provider = props.provider
+  const [ready, setReady] = React.useState(false)
+  const [mimoKey, setMimoKey] = React.useState('')
+  const [doubaoKey, setDoubaoKey] = React.useState('')
+  const [mimoBase, setMimoBase] = React.useState('https://api.xiaomimimo.com/v1')
+  const [doubaoRes, setDoubaoRes] = React.useState('seed-tts-2.0')
+  const [sampleRate, setSampleRate] = React.useState('24000')
+  const [saved, setSaved] = React.useState(false)
+
+  React.useEffect(() => {
+    if (ttsScope === null) return
+    const refresh = () => { setReady(ttsScope.getSnapshot().status === 'ready') }
+    refresh()
+    const un = ttsScope.subscribe(() => refresh())
+    return () => { un() }
+  }, [])
+
+  const save = async (): Promise<void> => {
+    if (ttsScope === null) return
+    try {
+      if (provider === 'mimo') {
+        if (mimoKey.trim() !== '') await ttsScope.set('mimoApiKey', mimoKey.trim())
+        if (mimoBase.trim() !== '') await ttsScope.set('mimoBaseURL', mimoBase.trim())
+      } else if (provider === 'doubao') {
+        if (doubaoKey.trim() !== '') await ttsScope.set('doubaoApiKey', doubaoKey.trim())
+        if (doubaoRes.trim() !== '') await ttsScope.set('doubaoResourceId', doubaoRes.trim())
+        if (sampleRate.trim() !== '' && !Number.isNaN(Number(sampleRate))) await ttsScope.set('doubaoSampleRate', Number(sampleRate))
+      }
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      console.log('[tts] cloud keys save failed', error)
+    }
+  }
+
+  return React.createElement('div', { 'data-tts-ready': ready ? '1' : '0' },
+    React.createElement('p', { className: styles.voiceHint },
+      provider === 'mimo'
+        ? 'MiMo 密钥存在服务器、不返回浏览器；填好点保存即可。'
+        : '豆包密钥存在服务器、不返回浏览器；填好点保存即可。'),
+    provider === 'mimo'
+      ? React.createElement(React.Fragment, null,
+          React.createElement('label', { className: styles.voiceField }, 'MiMo API Key',
+            React.createElement('input', {
+              className: styles.voiceSelect, type: 'password', placeholder: 'sk- 或 tp- 开头',
+              value: mimoKey,
+              onChange: (event: any) => { setMimoKey(event.target.value) },
+            }),
+          ),
+          React.createElement('label', { className: styles.voiceField }, 'MiMo 端点（可选）',
+            React.createElement('input', {
+              className: styles.voiceSelect, type: 'text',
+              value: mimoBase,
+              onChange: (event: any) => { setMimoBase(event.target.value) },
+            }),
+          ),
+        )
+      : null,
+    provider === 'doubao'
+      ? React.createElement(React.Fragment, null,
+          React.createElement('label', { className: styles.voiceField }, '豆包 API Key',
+            React.createElement('input', {
+              className: styles.voiceSelect, type: 'password', placeholder: '控制台 API Key（UUID）',
+              value: doubaoKey,
+              onChange: (event: any) => { setDoubaoKey(event.target.value) },
+            }),
+          ),
+          React.createElement('label', { className: styles.voiceField }, '豆包资源 ID（可选）',
+            React.createElement('input', {
+              className: styles.voiceSelect, type: 'text',
+              value: doubaoRes,
+              onChange: (event: any) => { setDoubaoRes(event.target.value) },
+            }),
+          ),
+          React.createElement('label', { className: styles.voiceField }, '豆包采样率（可选）',
+            React.createElement('input', {
+              className: styles.voiceSelect, type: 'number',
+              value: sampleRate,
+              onChange: (event: any) => { setSampleRate(event.target.value) },
+            }),
+          ),
+        )
+      : null,
+    React.createElement('div', { className: styles.voiceRow },
+      React.createElement('button', {
+        className: styles.voiceTest, type: 'button',
+        onClick: () => { void save() },
+      }, saved ? '已保存' : '保存密钥'),
+    ),
+  )
+}
+
 function VoiceSettings(): any {
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>(() => {
     try { return window.speechSynthesis === undefined ? [] : window.speechSynthesis.getVoices() } catch { return [] }
@@ -582,6 +796,116 @@ function VoiceSettings(): any {
     React.createElement('h3', { className: styles.voiceTitle }, '语音朗读（TTS 声音设置）'),
     React.createElement('p', { className: styles.voiceHint },
       '浏览器朗读用的是系统语音包：想换更甜的中文声线，去 Windows 设置 → 时间和语言 → 语音，安装「中文(简体)」语音（如 Microsoft 晓晓）；用 Edge 浏览器打开本页面还能选到在线自然语音。'),
+
+    React.createElement('h4', { className: styles.voiceSection }, '朗读引擎（音源）'),
+    React.createElement('p', { className: styles.voiceHint },
+      '选择朗读用的引擎。云端引擎（MiMo / 豆包）的 API Key 在「设置 → 插件配置 → 语音合成」里配置，Key 只存服务器、不进浏览器。'),
+    React.createElement('label', { className: styles.voiceField }, '引擎',
+      React.createElement('select', {
+        className: styles.voiceSelect,
+        value: pref.provider,
+        onChange: (event: any) => { update({ provider: event.target.value as VoiceProvider }) },
+      },
+        React.createElement('option', { value: 'browser' }, '浏览器语音（speechSynthesis）'),
+        React.createElement('option', { value: 'endpoint' }, '自定义 TTS 端点（自托管）'),
+        React.createElement('option', { value: 'mimo' }, '小米 MiMo（云端）'),
+        React.createElement('option', { value: 'doubao' }, '豆包（火山引擎 · 云端）'),
+      ),
+    ),
+    pref.provider === 'mimo'
+      ? React.createElement(React.Fragment, null,
+          React.createElement('label', { className: styles.voiceField }, '音色',
+            React.createElement('select', {
+              className: styles.voiceSelect,
+              value: pref.mimoVoice,
+              onChange: (event: any) => { update({ mimoVoice: event.target.value }) },
+            },
+              MIMO_VOICES.map((voiceName) => React.createElement('option', { key: voiceName, value: voiceName }, voiceName)),
+            ),
+          ),
+          React.createElement('label', { className: styles.voiceField }, '音频格式',
+            React.createElement('select', {
+              className: styles.voiceSelect,
+              value: pref.mimoFormat,
+              onChange: (event: any) => { update({ mimoFormat: event.target.value as 'mp3' | 'wav' | 'pcm' }) },
+            },
+              React.createElement('option', { value: 'mp3' }, 'MP3'),
+              React.createElement('option', { value: 'wav' }, 'WAV'),
+              React.createElement('option', { value: 'pcm' }, 'PCM'),
+            ),
+          ),
+        )
+      : null,
+    pref.provider === 'doubao'
+      ? React.createElement(React.Fragment, null,
+          React.createElement('label', { className: styles.voiceField }, '音色',
+            React.createElement('select', {
+              className: styles.voiceSelect,
+              value: DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice) ? pref.doubaoVoice : '__custom__',
+              onChange: (event: any) => { update({ doubaoVoice: event.target.value }) },
+            },
+              DOUBAO_VOICES.map((item) => React.createElement('option', { key: item.id, value: item.id }, item.label)),
+              React.createElement('option', { value: '__custom__' }, '自定义音色 id…'),
+            ),
+          ),
+          pref.doubaoVoice !== '' && !DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice)
+            ? React.createElement('label', { className: styles.voiceField }, '自定义 voice_type',
+                React.createElement('input', {
+                  className: styles.voiceSelect,
+                  type: 'text',
+                  value: pref.doubaoVoice,
+                  onChange: (event: any) => { update({ doubaoVoice: event.target.value }) },
+                }),
+              )
+            : null,
+          React.createElement('label', { className: styles.voiceField }, '采样率',
+            React.createElement('select', {
+              className: styles.voiceSelect,
+              value: String(pref.doubaoSampleRate),
+              onChange: (event: any) => { update({ doubaoSampleRate: Number(event.target.value) }) },
+            },
+              [8000, 16000, 22050, 24000, 32000, 44100, 48000].map((sr) => React.createElement('option', { key: sr, value: String(sr) }, `${sr} Hz`)),
+            ),
+          ),
+          React.createElement('label', { className: styles.voiceField }, `语速 ${pref.doubaoSpeechRate}`,
+            React.createElement('input', {
+              className: styles.voiceRange, type: 'range', min: -50, max: 100, step: 1,
+              value: String(pref.doubaoSpeechRate),
+              onChange: (event: any) => { update({ doubaoSpeechRate: Number(event.target.value) }) },
+            }),
+          ),
+          React.createElement('label', { className: styles.voiceField }, `音调 ${pref.doubaoPitchRate}`,
+            React.createElement('input', {
+              className: styles.voiceRange, type: 'range', min: -12, max: 12, step: 1,
+              value: String(pref.doubaoPitchRate),
+              onChange: (event: any) => { update({ doubaoPitchRate: Number(event.target.value) }) },
+            }),
+          ),
+          React.createElement('label', { className: styles.voiceField }, `音量 ${pref.doubaoLoudnessRate}`,
+            React.createElement('input', {
+              className: styles.voiceRange, type: 'range', min: -50, max: 100, step: 1,
+              value: String(pref.doubaoLoudnessRate),
+              onChange: (event: any) => { update({ doubaoLoudnessRate: Number(event.target.value) }) },
+            }),
+          ),
+          React.createElement('p', { className: styles.voiceHint },
+            React.createElement('a', {
+              className: styles.voiceSelect,
+              href: '/gameassist/doubao-voices',
+              target: '_blank',
+              rel: 'noreferrer',
+            }, '📖 打开豆包音色对照表（选好后复制 voice_type 粘到上面的「自定义 voice_type」）'),
+          ),
+        )
+      : null,
+    React.createElement('div', { className: styles.voiceRow },
+      React.createElement('button', {
+        className: styles.voiceTest,
+        type: 'button',
+        onClick: () => { void speakDefaultText('主人，你好呀。这是当前引擎的声音，这个声线你喜欢吗？') },
+      }, '试听当前引擎'),
+    ),
+    React.createElement(CloudKeysPanel, { provider: pref.provider }),
 
     React.createElement('h4', { className: styles.voiceSection }, '扮演角色（小夏模式）'),
     React.createElement('p', { className: styles.voiceHint },
@@ -724,7 +1048,10 @@ function UserReadAloudAction(props: any): any {
   const onClick = async (): Promise<void> => {
     if (notice !== null || text === '') return
     if (speaking) {
-      try { window.speechSynthesis?.cancel() } catch { /* nothing to cancel */ }
+      try { window.speechSynthesis?.cancel() } catch { /* nothing */ }
+      activeCloudController?.abort()
+      activeCloudController = null
+      if (activeCloudAudio !== null) { activeCloudAudio.pause(); activeCloudAudio = null }
       setSpeaking(false)
       return
     }
@@ -737,13 +1064,14 @@ function UserReadAloudAction(props: any): any {
       flash('❌')
       return
     }
+    setSpeaking(true)
     const started = await speakText(plain, { onend: () => { setSpeaking(false) } })
     if (!started.ok) {
-      flash('🔇')
+      setSpeaking(false)
+      if (!started.aborted) flash('🔇')
       return
     }
     setUsedVoice(started.voiceName)
-    setSpeaking(true)
   }
   const glyph = notice ?? (speaking ? '⏹' : '🔊')
   const title = notice === '🔇' ? '浏览器不支持语音朗读'
@@ -761,10 +1089,11 @@ function UserReadAloudAction(props: any): any {
 }
 
 /** Hard dependencies: theme, slot registry, the sessions service (turn stop), and the ui-session pending-interaction store. */
-export const inject = ['theme', 'slots', 'sessions', 'uiSession']
+export const inject = ['theme', 'slots', 'sessions', 'uiSession', 'settingsScope']
 
 /** Client plugin body: permanent token layer + dock charm + petal overlay. */
 export function apply(ctx: any): void {
+  ttsScope = ctx.settingsScope.bind({ namespace: TTS_NAMESPACE })
   ctx.effect(() => ctx.theme.overrideTokens('game-assistant-permanent', SAKURA_TOKENS))
 
   ctx.effect(() => {
@@ -799,7 +1128,7 @@ export function apply(ctx: any): void {
      * that store directly instead of a slot-injected session hook.
      */
     function QuestionNotifier(props: any): any {
-      const sessionId = props.session?.sessionId
+      const sessionId = props?.sessionId ?? props?.session?.sessionId
       const pendingKey = React.useSyncExternalStore(
         (listener: () => void) => ctx.uiSession.pendingInteractions.subscribe(listener),
         () => {
@@ -845,7 +1174,7 @@ export function apply(ctx: any): void {
      * flips running, and a session switch resets the baseline.
      */
     function AnswerDoneNotifier(props: any): any {
-      const sessionId = props.session?.sessionId
+      const sessionId = props?.sessionId ?? props?.session?.sessionId
       const signal = React.useSyncExternalStore(
         (listener: () => void) => ctx.sessions.list.subscribe(listener),
         () => {
@@ -861,7 +1190,7 @@ export function apply(ctx: any): void {
         // A different session gets a fresh baseline (no cross-session fire).
         prev.current = null
         seenRunning.current = false
-      }, [props.session?.sessionId])
+      }, [props?.sessionId ?? props?.session?.sessionId])
       React.useEffect(() => {
         const current = signal
         const was = prev.current
@@ -894,7 +1223,7 @@ export function apply(ctx: any): void {
         () => {
           const state = ctx.sessions.list.getSnapshot()
           const bySession = state === undefined || state === null ? undefined : state.jobsBySession
-          const sessionId = props.session?.sessionId
+          const sessionId = props?.sessionId ?? props?.session?.sessionId
           return bySession === undefined || bySession === null || sessionId === undefined ? null : (bySession[sessionId] ?? null)
         },
       )
@@ -906,12 +1235,11 @@ export function apply(ctx: any): void {
           if (job.status !== 'completed' && job.status !== 'failed' && job.status !== 'killed') continue
           announced.current.add(job.id)
           playChime()
-          const label = typeof job.label === 'string' && job.label !== '' ? job.label : (typeof job.kind === 'string' ? job.kind : '任务')
           const line = job.status === 'completed'
-            ? `主人，后台任务「${label}」完成啦！`
+            ? '主人，后台任务完成啦！'
             : job.status === 'failed'
-              ? `主人，后台任务「${label}」失败了呢，回来看一看吧。`
-              : `主人，后台任务「${label}」被停止了。`
+              ? '主人，后台任务失败了呢，回来看一看吧。'
+              : '主人，后台任务被停止了。'
           void speakText(line)
         }
       }, [jobs])
@@ -923,7 +1251,7 @@ export function apply(ctx: any): void {
      * speak; after APPROVAL_TIMEOUT_MS without an answer, stop the turn.
      */
     function ApprovalNotifier(props: any): any {
-      const sessionId = props.session?.sessionId
+      const sessionId = props?.sessionId ?? props?.session?.sessionId
       const pendingKey = React.useSyncExternalStore(
         (listener: () => void) => ctx.uiSession.pendingInteractions.subscribe(listener),
         () => {

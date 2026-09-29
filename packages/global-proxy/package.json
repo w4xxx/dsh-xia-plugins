@@ -1,6 +1,6 @@
 {
   "name": "dsh-global-proxy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Route every host-process undici fetch through the local HTTP(S) proxy (default 127.0.0.1:7892), keeping localhost and China-reachable APIs direct.",
   "license": "MIT",
   "type": "module",
@@ -16,7 +16,8 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "bundle": "tsdown",

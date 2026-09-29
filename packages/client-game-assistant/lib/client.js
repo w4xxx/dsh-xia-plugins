@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "@deepseek-ai/dsh-client-game-assistant",
+	id: "@w4xxx/dsh-client-game-assistant",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -30,10 +30,10 @@ window.__ModuleLoader__.load({
 		react = __toESM(react, 1);
 		//#region \0dsh-css:D:\mycode\deepseek-harness-master\packages\client\game-assistant\src\client\styles.module.css.mjs
 		const css = ".D7U48G_charm{color:var(--dsw-alias-label-secondary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;display:inline-flex}.D7U48G_dot{background:var(--dsw-alias-brand-primary);border-radius:50%;width:7px;height:7px;animation:2.4s ease-in-out infinite D7U48G_gameassist-pulse}@keyframes D7U48G_gameassist-pulse{0%,to{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.6)}}.D7U48G_petalLayer{pointer-events:none;z-index:1;position:fixed;inset:0;overflow:hidden}.D7U48G_petal{background:linear-gradient(135deg,#e0558f8c,#ff7ab859);border-radius:60% 40%;width:10px;height:14px;animation-name:D7U48G_gameassist-fall;animation-timing-function:linear;animation-iteration-count:infinite;position:absolute;top:-24px}@keyframes D7U48G_gameassist-fall{0%{transform:translateY(-24px)rotate(0)}50%{transform:translate(28px,50vh)rotate(180deg)}to{transform:translate(-14px,105vh)rotate(360deg)}}.D7U48G_notifyCharm{color:var(--dsw-alias-state-warn-primary);user-select:none;align-items:center;gap:6px;font-size:11px;line-height:16px;animation:1.2s ease-in-out infinite D7U48G_gameassist-notify-blink;display:inline-flex}@keyframes D7U48G_gameassist-notify-blink{0%,to{opacity:1}50%{opacity:.45}}.D7U48G_readAloud{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:5px;justify-content:center;align-items:center;padding:0;font-size:13px;line-height:1;display:inline-flex}.D7U48G_readAloud:hover{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}.D7U48G_readAloud[aria-pressed=true]{color:var(--dsw-alias-brand-primary)}.D7U48G_voicePage{flex-direction:column;gap:14px;max-width:520px;display:flex}.D7U48G_voiceTitle{color:var(--dsw-alias-label-primary);margin:0;font-size:15px}.D7U48G_voiceSection{border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-brand-primary);margin:10px 0 0;padding-top:12px;font-size:14px;font-weight:600}.D7U48G_voiceRow{flex-wrap:wrap;gap:8px;display:flex}.D7U48G_voiceHint{color:var(--dsw-alias-label-secondary);margin:0;font-size:12px;line-height:1.7}.D7U48G_voiceField{color:var(--dsw-alias-label-primary);flex-direction:column;gap:6px;font-size:13px;display:flex}.D7U48G_voiceSelect{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:6px;padding:6px 8px}.D7U48G_voiceRange{width:100%;accent-color:var(--dsw-alias-brand-primary)}.D7U48G_voiceTest{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-brand-primary);cursor:pointer;border-radius:6px;align-self:flex-start;padding:6px 14px}@media (prefers-reduced-motion:reduce){.D7U48G_dot,.D7U48G_petal,.D7U48G_notifyCharm{animation:none}}";
-		const tagId = "@deepseek-ai/dsh-client-game-assistant/styles.module.css";
+		const tagId = "@w4xxx/dsh-client-game-assistant/styles.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
-			tag.dataset.plugin = "@deepseek-ai/dsh-client-game-assistant";
+			tag.dataset.plugin = "@w4xxx/dsh-client-game-assistant";
 			tag.dataset.pluginCss = tagId;
 			tag.textContent = css;
 			document.head.appendChild(tag);
@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
 			"voiceTitle": "D7U48G_voiceTitle"
 		};
 		//#endregion
-		//#region src/client/index.ts
+		//#region lib/types/client/index.js
 		/**
 		* Game-assistant companion skin, browser half. Permanent "sakura" alias-token
 		* layer over the active theme, a time-aware charm line in the composer dock,
@@ -182,33 +182,85 @@ window.__ModuleLoader__.load({
 		}
 		/** localStorage key for the voice preference (browser-local by design: voices are per machine). */
 		const VOICE_STORAGE_KEY = "dsh.gameassist.voice.v1";
+		/** Xiaomi MiMo built-in voice presets (mimo-v2.5-tts). */
+		const MIMO_VOICES = [
+			"冰糖",
+			"茉莉",
+			"苏打",
+			"白桦",
+			"Mia",
+			"Chloe",
+			"Milo",
+			"Dean"
+		];
+		/** Volcengine Doubao voice_type presets verified for `seed-tts-2.0` (2026-09-01, resource id must match). */
+		const DOUBAO_VOICES = [
+			{
+				id: "zh_female_vv_uranus_bigtts",
+				label: "vivi 2.0（女声）"
+			},
+			{
+				id: "zh_female_xiaohe_uranus_bigtts",
+				label: "小何（女声）"
+			},
+			{
+				id: "zh_male_m191_uranus_bigtts",
+				label: "云舟（男声）"
+			},
+			{
+				id: "zh_male_taocheng_uranus_bigtts",
+				label: "小天（男声）"
+			}
+		];
+		const DEFAULT_VOICE_PREF = {
+			voiceURI: null,
+			voiceName: "",
+			rate: 1.1,
+			pitch: 1.1,
+			endpoint: "",
+			provider: "browser",
+			mimoVoice: "冰糖",
+			mimoFormat: "mp3",
+			doubaoVoice: "zh_female_vv_uranus_bigtts",
+			doubaoFormat: "mp3",
+			doubaoSampleRate: 24e3,
+			doubaoSpeechRate: 0,
+			doubaoPitchRate: 0,
+			doubaoLoudnessRate: 0
+		};
 		/** Read the persisted voice preference with bounds-guards and a safe default. */
 		function loadVoicePref() {
 			try {
 				const raw = window.localStorage.getItem(VOICE_STORAGE_KEY);
-				if (raw === null) return {
-					voiceURI: null,
-					voiceName: "",
-					rate: 1.1,
-					pitch: 1.1,
-					endpoint: ""
-				};
+				if (raw === null) return { ...DEFAULT_VOICE_PREF };
 				const parsed = JSON.parse(raw);
+				const provider = parsed.provider === "mimo" || parsed.provider === "doubao" || parsed.provider === "endpoint" ? parsed.provider : "browser";
 				return {
 					voiceURI: typeof parsed.voiceURI === "string" ? parsed.voiceURI : null,
 					voiceName: typeof parsed.voiceName === "string" ? parsed.voiceName : "",
 					rate: typeof parsed.rate === "number" && parsed.rate >= .5 && parsed.rate <= 2 ? parsed.rate : 1.1,
 					pitch: typeof parsed.pitch === "number" && parsed.pitch >= .5 && parsed.pitch <= 2 ? parsed.pitch : 1.1,
-					endpoint: typeof parsed.endpoint === "string" ? parsed.endpoint : ""
+					endpoint: typeof parsed.endpoint === "string" ? parsed.endpoint : "",
+					provider,
+					mimoVoice: typeof parsed.mimoVoice === "string" && parsed.mimoVoice !== "" ? parsed.mimoVoice : DEFAULT_VOICE_PREF.mimoVoice,
+					mimoFormat: parsed.mimoFormat === "wav" || parsed.mimoFormat === "pcm" ? parsed.mimoFormat : "mp3",
+					doubaoVoice: typeof parsed.doubaoVoice === "string" && parsed.doubaoVoice !== "" ? parsed.doubaoVoice : DEFAULT_VOICE_PREF.doubaoVoice,
+					doubaoFormat: parsed.doubaoFormat === "pcm" || parsed.doubaoFormat === "ogg_opus" ? parsed.doubaoFormat : "mp3",
+					doubaoSampleRate: typeof parsed.doubaoSampleRate === "number" && [
+						8e3,
+						16e3,
+						22050,
+						24e3,
+						32e3,
+						44100,
+						48e3
+					].includes(parsed.doubaoSampleRate) ? parsed.doubaoSampleRate : 24e3,
+					doubaoSpeechRate: typeof parsed.doubaoSpeechRate === "number" && parsed.doubaoSpeechRate >= -50 && parsed.doubaoSpeechRate <= 100 ? parsed.doubaoSpeechRate : 0,
+					doubaoPitchRate: typeof parsed.doubaoPitchRate === "number" && parsed.doubaoPitchRate >= -12 && parsed.doubaoPitchRate <= 12 ? parsed.doubaoPitchRate : 0,
+					doubaoLoudnessRate: typeof parsed.doubaoLoudnessRate === "number" && parsed.doubaoLoudnessRate >= -50 && parsed.doubaoLoudnessRate <= 100 ? parsed.doubaoLoudnessRate : 0
 				};
 			} catch {
-				return {
-					voiceURI: null,
-					voiceName: "",
-					rate: 1.1,
-					pitch: 1.1,
-					endpoint: ""
-				};
+				return { ...DEFAULT_VOICE_PREF };
 			}
 		}
 		/** Persist the voice preference (best effort — private mode may refuse). */
@@ -262,6 +314,13 @@ window.__ModuleLoader__.load({
 		* `voiceschanged`, so per-click matching never races the async load.
 		*/
 		let cachedVoices = [];
+		/** Currently-playing browser Audio element from a cloud-TTS call, for the stop path. */
+		let activeCloudAudio = null;
+		/** AbortController for the in-flight cloud-TTS fetch, so a second click cancels it. */
+		let activeCloudController = null;
+		/** Injected settings scope for the host-held `gameassist-tts` cloud-TTS keys. */
+		let ttsScope = null;
+		const TTS_NAMESPACE = "gameassist-tts";
 		function refreshCachedVoices() {
 			try {
 				const synth = window.speechSynthesis;
@@ -330,8 +389,75 @@ window.__ModuleLoader__.load({
 		* default.
 		* @returns false when nothing could speak (callers flash 🔇).
 		*/
+		/** Speak through a cloud provider via the same-origin `/gameassist/tts` proxy. Keys stay host-side. */
+		async function speakViaCloud(pref, text, options) {
+			const controller = new AbortController();
+			activeCloudController = controller;
+			const payload = pref.provider === "mimo" ? {
+				provider: "mimo",
+				text,
+				voice: pref.mimoVoice,
+				format: pref.mimoFormat
+			} : {
+				provider: "doubao",
+				text,
+				voice: pref.doubaoVoice,
+				format: pref.doubaoFormat,
+				sampleRate: pref.doubaoSampleRate,
+				speechRate: pref.doubaoSpeechRate,
+				pitchRate: pref.doubaoPitchRate,
+				loudnessRate: pref.doubaoLoudnessRate
+			};
+			let response;
+			try {
+				response = await fetch("/gameassist/tts", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(payload),
+					signal: controller.signal
+				});
+			} finally {
+				if (activeCloudController === controller) activeCloudController = null;
+			}
+			if (!response.ok) {
+				const message = (await response.json().catch(() => null))?.message;
+				throw new Error(`${pref.provider} tts ${response.status}${message !== void 0 ? `: ${message}` : ""}`);
+			}
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const audio = new Audio(url);
+			if (pref.provider === "mimo") audio.playbackRate = Math.min(2, Math.max(.5, pref.rate));
+			activeCloudAudio = audio;
+			const finish = () => {
+				if (activeCloudAudio === audio) activeCloudAudio = null;
+				if (activeCloudController === controller) activeCloudController = null;
+				if (options?.onend !== void 0) options.onend();
+				URL.revokeObjectURL(url);
+			};
+			audio.onended = finish;
+			audio.onerror = finish;
+			await audio.play();
+			return {
+				ok: true,
+				voiceName: pref.provider === "mimo" ? `MiMo:${pref.mimoVoice}` : `豆包:${pref.doubaoVoice}`
+			};
+		}
 		async function speakText(text, options) {
 			const pref = loadVoicePref();
+			if (pref.provider === "mimo" || pref.provider === "doubao") try {
+				return await speakViaCloud(pref, text, options);
+			} catch (error) {
+				console.log("[read-aloud] cloud tts failed:", error);
+				if (error?.name === "AbortError") return {
+					ok: false,
+					voiceName: "",
+					aborted: true
+				};
+				return {
+					ok: false,
+					voiceName: ""
+				};
+			}
 			if (pref.endpoint !== "") try {
 				const response = await fetch(pref.endpoint, {
 					method: "POST",
@@ -419,6 +545,14 @@ window.__ModuleLoader__.load({
 		*/
 		async function speakDefaultText(text) {
 			const pref = loadVoicePref();
+			if (pref.provider === "mimo" || pref.provider === "doubao") {
+				try {
+					await speakViaCloud(pref, text);
+				} catch (error) {
+					console.log("[read-aloud] default cloud tts failed:", error);
+				}
+				return;
+			}
 			if (pref.endpoint !== "") try {
 				const response = await fetch(pref.endpoint, {
 					method: "POST",
@@ -517,10 +651,17 @@ window.__ModuleLoader__.load({
 			};
 			const onClick = async () => {
 				if (notice !== null) return;
-				const synth = window.speechSynthesis;
-				if (synth === void 0) {
-					console.log("[read-aloud] speechSynthesis unavailable");
-					flash("🔇");
+				if (speaking) {
+					try {
+						window.speechSynthesis?.cancel();
+					} catch {}
+					activeCloudController?.abort();
+					activeCloudController = null;
+					if (activeCloudAudio !== null) {
+						activeCloudAudio.pause();
+						activeCloudAudio = null;
+					}
+					setSpeaking(false);
 					return;
 				}
 				if (text === null || text === "") {
@@ -528,31 +669,28 @@ window.__ModuleLoader__.load({
 					flash("❌");
 					return;
 				}
-				if (speaking) {
-					synth.cancel();
-					setSpeaking(false);
+				const { provider } = loadVoicePref();
+				if (provider !== "mimo" && provider !== "doubao" && provider !== "endpoint" && window.speechSynthesis === void 0) {
+					console.log("[read-aloud] speechSynthesis unavailable");
+					flash("🔇");
 					return;
 				}
-				try {
-					const plain = text.replace(/```[\s\S]*?```/g, "，代码省略，").replace(/[#>*_`~\-[\]()!|]/g, " ").replace(/\s+/g, " ").trim();
-					if (plain === "") {
-						flash("❌");
-						return;
-					}
-					console.log("[read-aloud] speaking", plain.length, "chars for message", messageId);
-					const started = await speakText(plain, { onend: () => {
-						setSpeaking(false);
-					} });
-					if (!started.ok) {
-						flash("🔇");
-						return;
-					}
-					setUsedVoice(started.voiceName);
-					setSpeaking(true);
-				} catch (error) {
-					console.log("[read-aloud] failed:", error);
-					flash("⚠️");
+				const plain = text.replace(/```[\s\S]*?```/g, "，代码省略，").replace(/[#>*_`~\-[\]()!|]/g, " ").replace(/\s+/g, " ").trim();
+				if (plain === "") {
+					flash("❌");
+					return;
 				}
+				console.log("[read-aloud] speaking", plain.length, "chars for message", messageId);
+				setSpeaking(true);
+				const started = await speakText(plain, { onend: () => {
+					setSpeaking(false);
+				} });
+				if (!started.ok) {
+					setSpeaking(false);
+					if (!started.aborted) flash("🔇");
+					return;
+				}
+				setUsedVoice(started.voiceName);
 			};
 			const glyph = notice ?? (speaking ? "⏹" : "🔊");
 			const title = notice === "❌" ? "未找到消息文本" : notice === "🔇" ? "浏览器不支持语音朗读" : notice === "⚠️" ? "朗读失败" : speaking ? "停止朗读" : usedVoice === "" ? "朗读" : `朗读（上次音色：${usedVoice}）`;
@@ -571,6 +709,93 @@ window.__ModuleLoader__.load({
 		* the date) and the default voice used by every non-roster mode. Both persist
 		* in localStorage and feed speakText().
 		*/
+		/**
+		* Cloud-TTS credential editor for the host-held `gameassist-tts` namespace.
+		* Keys are written write-only (role 'secret' redacts them from responses), so
+		* the inputs start blank and a save pushes any non-empty value server-side.
+		*/
+		function CloudKeysPanel(props) {
+			const provider = props.provider;
+			const [ready, setReady] = react.default.useState(false);
+			const [mimoKey, setMimoKey] = react.default.useState("");
+			const [doubaoKey, setDoubaoKey] = react.default.useState("");
+			const [mimoBase, setMimoBase] = react.default.useState("https://api.xiaomimimo.com/v1");
+			const [doubaoRes, setDoubaoRes] = react.default.useState("seed-tts-2.0");
+			const [sampleRate, setSampleRate] = react.default.useState("24000");
+			const [saved, setSaved] = react.default.useState(false);
+			react.default.useEffect(() => {
+				if (ttsScope === null) return;
+				const refresh = () => {
+					setReady(ttsScope.getSnapshot().status === "ready");
+				};
+				refresh();
+				const un = ttsScope.subscribe(() => refresh());
+				return () => {
+					un();
+				};
+			}, []);
+			const save = async () => {
+				if (ttsScope === null) return;
+				try {
+					if (provider === "mimo") {
+						if (mimoKey.trim() !== "") await ttsScope.set("mimoApiKey", mimoKey.trim());
+						if (mimoBase.trim() !== "") await ttsScope.set("mimoBaseURL", mimoBase.trim());
+					} else if (provider === "doubao") {
+						if (doubaoKey.trim() !== "") await ttsScope.set("doubaoApiKey", doubaoKey.trim());
+						if (doubaoRes.trim() !== "") await ttsScope.set("doubaoResourceId", doubaoRes.trim());
+						if (sampleRate.trim() !== "" && !Number.isNaN(Number(sampleRate))) await ttsScope.set("doubaoSampleRate", Number(sampleRate));
+					}
+					setSaved(true);
+					window.setTimeout(() => setSaved(false), 2e3);
+				} catch (error) {
+					console.log("[tts] cloud keys save failed", error);
+				}
+			};
+			return react.default.createElement("div", { "data-tts-ready": ready ? "1" : "0" }, react.default.createElement("p", { className: styles_module_css_default.voiceHint }, provider === "mimo" ? "MiMo 密钥存在服务器、不返回浏览器；填好点保存即可。" : "豆包密钥存在服务器、不返回浏览器；填好点保存即可。"), provider === "mimo" ? react.default.createElement(react.default.Fragment, null, react.default.createElement("label", { className: styles_module_css_default.voiceField }, "MiMo API Key", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "password",
+				placeholder: "sk- 或 tp- 开头",
+				value: mimoKey,
+				onChange: (event) => {
+					setMimoKey(event.target.value);
+				}
+			})), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "MiMo 端点（可选）", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "text",
+				value: mimoBase,
+				onChange: (event) => {
+					setMimoBase(event.target.value);
+				}
+			}))) : null, provider === "doubao" ? react.default.createElement(react.default.Fragment, null, react.default.createElement("label", { className: styles_module_css_default.voiceField }, "豆包 API Key", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "password",
+				placeholder: "控制台 API Key（UUID）",
+				value: doubaoKey,
+				onChange: (event) => {
+					setDoubaoKey(event.target.value);
+				}
+			})), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "豆包资源 ID（可选）", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "text",
+				value: doubaoRes,
+				onChange: (event) => {
+					setDoubaoRes(event.target.value);
+				}
+			})), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "豆包采样率（可选）", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "number",
+				value: sampleRate,
+				onChange: (event) => {
+					setSampleRate(event.target.value);
+				}
+			}))) : null, react.default.createElement("div", { className: styles_module_css_default.voiceRow }, react.default.createElement("button", {
+				className: styles_module_css_default.voiceTest,
+				type: "button",
+				onClick: () => {
+					save();
+				}
+			}, saved ? "已保存" : "保存密钥")));
+		}
 		function VoiceSettings() {
 			const [voices, setVoices] = react.default.useState(() => {
 				try {
@@ -643,7 +868,102 @@ window.__ModuleLoader__.load({
 			};
 			const zhVoices = voices.filter((item) => item.lang.toLowerCase().startsWith("zh"));
 			const listed = zhVoices.length > 0 ? zhVoices : voices;
-			return react.default.createElement("div", { className: styles_module_css_default.voicePage }, react.default.createElement("h3", { className: styles_module_css_default.voiceTitle }, "语音朗读（TTS 声音设置）"), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, "浏览器朗读用的是系统语音包：想换更甜的中文声线，去 Windows 设置 → 时间和语言 → 语音，安装「中文(简体)」语音（如 Microsoft 晓晓）；用 Edge 浏览器打开本页面还能选到在线自然语音。"), react.default.createElement("h4", { className: styles_module_css_default.voiceSection }, "扮演角色（小夏模式）"), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, `今天的轮值女主角：${roleName}。下面的调整只对今天有效，明天自动恢复该角色的默认预设。`), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "音色", react.default.createElement("select", {
+			return react.default.createElement("div", { className: styles_module_css_default.voicePage }, react.default.createElement("h3", { className: styles_module_css_default.voiceTitle }, "语音朗读（TTS 声音设置）"), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, "浏览器朗读用的是系统语音包：想换更甜的中文声线，去 Windows 设置 → 时间和语言 → 语音，安装「中文(简体)」语音（如 Microsoft 晓晓）；用 Edge 浏览器打开本页面还能选到在线自然语音。"), react.default.createElement("h4", { className: styles_module_css_default.voiceSection }, "朗读引擎（音源）"), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, "选择朗读用的引擎。云端引擎（MiMo / 豆包）的 API Key 在「设置 → 插件配置 → 语音合成」里配置，Key 只存服务器、不进浏览器。"), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "引擎", react.default.createElement("select", {
+				className: styles_module_css_default.voiceSelect,
+				value: pref.provider,
+				onChange: (event) => {
+					update({ provider: event.target.value });
+				}
+			}, react.default.createElement("option", { value: "browser" }, "浏览器语音（speechSynthesis）"), react.default.createElement("option", { value: "endpoint" }, "自定义 TTS 端点（自托管）"), react.default.createElement("option", { value: "mimo" }, "小米 MiMo（云端）"), react.default.createElement("option", { value: "doubao" }, "豆包（火山引擎 · 云端）"))), pref.provider === "mimo" ? react.default.createElement(react.default.Fragment, null, react.default.createElement("label", { className: styles_module_css_default.voiceField }, "音色", react.default.createElement("select", {
+				className: styles_module_css_default.voiceSelect,
+				value: pref.mimoVoice,
+				onChange: (event) => {
+					update({ mimoVoice: event.target.value });
+				}
+			}, MIMO_VOICES.map((voiceName) => react.default.createElement("option", {
+				key: voiceName,
+				value: voiceName
+			}, voiceName)))), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "音频格式", react.default.createElement("select", {
+				className: styles_module_css_default.voiceSelect,
+				value: pref.mimoFormat,
+				onChange: (event) => {
+					update({ mimoFormat: event.target.value });
+				}
+			}, react.default.createElement("option", { value: "mp3" }, "MP3"), react.default.createElement("option", { value: "wav" }, "WAV"), react.default.createElement("option", { value: "pcm" }, "PCM")))) : null, pref.provider === "doubao" ? react.default.createElement(react.default.Fragment, null, react.default.createElement("label", { className: styles_module_css_default.voiceField }, "音色", react.default.createElement("select", {
+				className: styles_module_css_default.voiceSelect,
+				value: DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice) ? pref.doubaoVoice : "__custom__",
+				onChange: (event) => {
+					update({ doubaoVoice: event.target.value });
+				}
+			}, DOUBAO_VOICES.map((item) => react.default.createElement("option", {
+				key: item.id,
+				value: item.id
+			}, item.label)), react.default.createElement("option", { value: "__custom__" }, "自定义音色 id…"))), pref.doubaoVoice !== "" && !DOUBAO_VOICES.some((item) => item.id === pref.doubaoVoice) ? react.default.createElement("label", { className: styles_module_css_default.voiceField }, "自定义 voice_type", react.default.createElement("input", {
+				className: styles_module_css_default.voiceSelect,
+				type: "text",
+				value: pref.doubaoVoice,
+				onChange: (event) => {
+					update({ doubaoVoice: event.target.value });
+				}
+			})) : null, react.default.createElement("label", { className: styles_module_css_default.voiceField }, "采样率", react.default.createElement("select", {
+				className: styles_module_css_default.voiceSelect,
+				value: String(pref.doubaoSampleRate),
+				onChange: (event) => {
+					update({ doubaoSampleRate: Number(event.target.value) });
+				}
+			}, [
+				8e3,
+				16e3,
+				22050,
+				24e3,
+				32e3,
+				44100,
+				48e3
+			].map((sr) => react.default.createElement("option", {
+				key: sr,
+				value: String(sr)
+			}, `${sr} Hz`)))), react.default.createElement("label", { className: styles_module_css_default.voiceField }, `语速 ${pref.doubaoSpeechRate}`, react.default.createElement("input", {
+				className: styles_module_css_default.voiceRange,
+				type: "range",
+				min: -50,
+				max: 100,
+				step: 1,
+				value: String(pref.doubaoSpeechRate),
+				onChange: (event) => {
+					update({ doubaoSpeechRate: Number(event.target.value) });
+				}
+			})), react.default.createElement("label", { className: styles_module_css_default.voiceField }, `音调 ${pref.doubaoPitchRate}`, react.default.createElement("input", {
+				className: styles_module_css_default.voiceRange,
+				type: "range",
+				min: -12,
+				max: 12,
+				step: 1,
+				value: String(pref.doubaoPitchRate),
+				onChange: (event) => {
+					update({ doubaoPitchRate: Number(event.target.value) });
+				}
+			})), react.default.createElement("label", { className: styles_module_css_default.voiceField }, `音量 ${pref.doubaoLoudnessRate}`, react.default.createElement("input", {
+				className: styles_module_css_default.voiceRange,
+				type: "range",
+				min: -50,
+				max: 100,
+				step: 1,
+				value: String(pref.doubaoLoudnessRate),
+				onChange: (event) => {
+					update({ doubaoLoudnessRate: Number(event.target.value) });
+				}
+			})), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, react.default.createElement("a", {
+				className: styles_module_css_default.voiceSelect,
+				href: "/gameassist/doubao-voices",
+				target: "_blank",
+				rel: "noreferrer"
+			}, "📖 打开豆包音色对照表（选好后复制 voice_type 粘到上面的「自定义 voice_type」）"))) : null, react.default.createElement("div", { className: styles_module_css_default.voiceRow }, react.default.createElement("button", {
+				className: styles_module_css_default.voiceTest,
+				type: "button",
+				onClick: () => {
+					speakDefaultText("主人，你好呀。这是当前引擎的声音，这个声线你喜欢吗？");
+				}
+			}, "试听当前引擎")), react.default.createElement(CloudKeysPanel, { provider: pref.provider }), react.default.createElement("h4", { className: styles_module_css_default.voiceSection }, "扮演角色（小夏模式）"), react.default.createElement("p", { className: styles_module_css_default.voiceHint }, `今天的轮值女主角：${roleName}。下面的调整只对今天有效，明天自动恢复该角色的默认预设。`), react.default.createElement("label", { className: styles_module_css_default.voiceField }, "音色", react.default.createElement("select", {
 				className: styles_module_css_default.voiceSelect,
 				value: roleURI,
 				onChange: (event) => {
@@ -770,6 +1090,12 @@ window.__ModuleLoader__.load({
 					try {
 						window.speechSynthesis?.cancel();
 					} catch {}
+					activeCloudController?.abort();
+					activeCloudController = null;
+					if (activeCloudAudio !== null) {
+						activeCloudAudio.pause();
+						activeCloudAudio = null;
+					}
 					setSpeaking(false);
 					return;
 				}
@@ -778,15 +1104,16 @@ window.__ModuleLoader__.load({
 					flash("❌");
 					return;
 				}
+				setSpeaking(true);
 				const started = await speakText(plain, { onend: () => {
 					setSpeaking(false);
 				} });
 				if (!started.ok) {
-					flash("🔇");
+					setSpeaking(false);
+					if (!started.aborted) flash("🔇");
 					return;
 				}
 				setUsedVoice(started.voiceName);
-				setSpeaking(true);
 			};
 			const glyph = notice ?? (speaking ? "⏹" : "🔊");
 			const title = notice === "🔇" ? "浏览器不支持语音朗读" : notice === "⚠️" ? "朗读失败" : speaking ? "停止朗读" : usedVoice === "" ? "朗读" : `朗读（上次音色：${usedVoice}）`;
@@ -804,10 +1131,12 @@ window.__ModuleLoader__.load({
 			"theme",
 			"slots",
 			"sessions",
-			"uiSession"
+			"uiSession",
+			"settingsScope"
 		];
 		/** Client plugin body: permanent token layer + dock charm + petal overlay. */
 		function apply(ctx) {
+			ttsScope = ctx.settingsScope.bind({ namespace: TTS_NAMESPACE });
 			ctx.effect(() => ctx.theme.overrideTokens("game-assistant-permanent", SAKURA_TOKENS));
 			ctx.effect(() => {
 				const synth = window.speechSynthesis;
@@ -842,7 +1171,7 @@ window.__ModuleLoader__.load({
 				* that store directly instead of a slot-injected session hook.
 				*/
 				function QuestionNotifier(props) {
-					const sessionId = props.session?.sessionId;
+					const sessionId = props?.sessionId ?? props?.session?.sessionId;
 					const pendingKey = react.default.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
 						const map = ctx.uiSession.pendingInteractions.getSnapshot();
 						if (map === void 0 || map === null || sessionId === void 0) return null;
@@ -883,7 +1212,7 @@ window.__ModuleLoader__.load({
 				* flips running, and a session switch resets the baseline.
 				*/
 				function AnswerDoneNotifier(props) {
-					const sessionId = props.session?.sessionId;
+					const sessionId = props?.sessionId ?? props?.session?.sessionId;
 					const signal = react.default.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
 						const state = ctx.sessions.list.getSnapshot();
 						const summary = state === void 0 || state === null || sessionId === void 0 ? void 0 : state.byId?.[sessionId];
@@ -895,7 +1224,7 @@ window.__ModuleLoader__.load({
 					react.default.useEffect(() => {
 						prev.current = null;
 						seenRunning.current = false;
-					}, [props.session?.sessionId]);
+					}, [props?.sessionId ?? props?.session?.sessionId]);
 					react.default.useEffect(() => {
 						const current = signal;
 						const was = prev.current;
@@ -921,7 +1250,7 @@ window.__ModuleLoader__.load({
 					const jobs = react.default.useSyncExternalStore((listener) => ctx.sessions.list.subscribe(listener), () => {
 						const state = ctx.sessions.list.getSnapshot();
 						const bySession = state === void 0 || state === null ? void 0 : state.jobsBySession;
-						const sessionId = props.session?.sessionId;
+						const sessionId = props?.sessionId ?? props?.session?.sessionId;
 						return bySession === void 0 || bySession === null || sessionId === void 0 ? null : bySession[sessionId] ?? null;
 					});
 					const announced = react.default.useRef(/* @__PURE__ */ new Set());
@@ -932,8 +1261,7 @@ window.__ModuleLoader__.load({
 							if (job.status !== "completed" && job.status !== "failed" && job.status !== "killed") continue;
 							announced.current.add(job.id);
 							playChime();
-							const label = typeof job.label === "string" && job.label !== "" ? job.label : typeof job.kind === "string" ? job.kind : "任务";
-							speakText(job.status === "completed" ? `主人，后台任务「${label}」完成啦！` : job.status === "failed" ? `主人，后台任务「${label}」失败了呢，回来看一看吧。` : `主人，后台任务「${label}」被停止了。`);
+							speakText(job.status === "completed" ? "主人，后台任务完成啦！" : job.status === "failed" ? "主人，后台任务失败了呢，回来看一看吧。" : "主人，后台任务被停止了。");
 						}
 					}, [jobs]);
 					return null;
@@ -943,7 +1271,7 @@ window.__ModuleLoader__.load({
 				* speak; after APPROVAL_TIMEOUT_MS without an answer, stop the turn.
 				*/
 				function ApprovalNotifier(props) {
-					const sessionId = props.session?.sessionId;
+					const sessionId = props?.sessionId ?? props?.session?.sessionId;
 					const pendingKey = react.default.useSyncExternalStore((listener) => ctx.uiSession.pendingInteractions.subscribe(listener), () => {
 						const map = ctx.uiSession.pendingInteractions.getSnapshot();
 						if (map === void 0 || map === null || sessionId === void 0) return null;
@@ -1074,6 +1402,8 @@ window.__ModuleLoader__.load({
 			})))));
 		}
 		//#endregion
+		exports.DOUBAO_VOICES = DOUBAO_VOICES;
+		exports.MIMO_VOICES = MIMO_VOICES;
 		exports.apply = apply;
 		exports.inject = inject;
 		return module.exports;

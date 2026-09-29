@@ -12,6 +12,15 @@ import z from '@deepseek-ai/schemastery';
 export declare const name = "gameassist-memory";
 /** The registries this plugin contributes to. */
 export declare const inject: string[];
+/**
+ * Default memory-bank location, resolved at load time.
+ *
+ * Kept under the shared Harness home rather than a per-profile directory so one
+ * bank serves the CLI, Web, and desktop hosts at once — and so the plugin still
+ * loads on hosts whose profile patch nobody can hand-edit.
+ * @returns the absolute path of the JSON memory bank.
+ */
+export declare function defaultMemoryFile(): string;
 /** Plugin configuration validated by the loader. */
 export interface Config {
     /** Absolute path of the JSON memory bank file. */

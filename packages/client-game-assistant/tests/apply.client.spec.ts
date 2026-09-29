@@ -14,7 +14,9 @@ const OVERLAY = 'shell.overlay'
 
 describe('game-assistant client apply', () => {
   it('declares theme and slots', () => {
-    expect(inject).toEqual(['theme', 'slots', 'sessions', 'uiSession'])
+    // `settingsScope` carries the host-held `gameassist-tts` cloud-TTS keys, so
+    // it belongs in the hard dependency list alongside the UI services.
+    expect(inject).toEqual(['theme', 'slots', 'sessions', 'uiSession', 'settingsScope'])
   })
 
   it('stacks the permanent token layer and registers both entries; dispose removes them', async () => {

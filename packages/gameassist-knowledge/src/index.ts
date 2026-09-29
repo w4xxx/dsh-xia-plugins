@@ -31,8 +31,40 @@ function diag(message: string): void {
 }
 diag('module imported')
 
-/** The registries this plugin contributes to. */
-export const inject = ['systemPrompt', 'tools', 'webServer']
+/**
+ * Resolve an optional `webServer` service from a host context.
+ *
+ * A bare property read is not safe here: cordis wraps every context in a proxy
+ * whose `get` trap THROWS for a service that was never injected (the message is
+ * `cannot get property "webServer" without inject`). The reflection layer's
+ * non-strict lookup is the supported way to ask without demanding it, and it
+ * answers `undefined` when the host has no HTTP layer — which is exactly the
+ * Electron desktop shell.
+ * @param ctx - the plugin context, real or a test double.
+ * @returns the web server service, or undefined when this host has none.
+ */
+export function resolveWebServer(ctx: any): any {
+  const viaReflect = ctx?.reflect?.get?.('webServer', false)
+  if (viaReflect !== undefined && viaReflect !== null) return viaReflect
+  // Plain-object hosts (and the unit-test stub) expose services directly, where
+  // an absent property is simply undefined instead of an error.
+  try {
+    return ctx?.webServer ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The registries this plugin contributes to.
+ *
+ * `webServer` is deliberately absent: the Electron desktop shell disables its
+ * HTTP layer, so a hard dependency here would stop the whole plugin — and with
+ * it the `kb_*` tools — from loading there. The browser routes are instead
+ * registered opportunistically at runtime (see the route effect below) whenever
+ * a `webServer` happens to be present, which is the case on Web/CLI.
+ */
+export const inject = ['systemPrompt', 'tools']
 
 /** Plugin configuration validated by the loader. */
 export interface Config {
@@ -40,9 +72,23 @@ export interface Config {
   kbRoot: string
 }
 
+/**
+ * Default knowledge-base root, resolved at load time.
+ *
+ * A bundle patch normally carries no `config`, so this default is what makes
+ * the plugin installable on hosts (notably the Electron desktop shell) where
+ * nobody can hand-edit a profile patch. `DSH_KB_ROOT` wins when set, then the
+ * workspace sibling `knowledge-bases` under `$E:/myaicode`-style layouts.
+ */
+export function defaultKbRoot(): string {
+  const fromEnv = process.env.DSH_KB_ROOT
+  if (fromEnv !== undefined && fromEnv.trim().length > 0) return resolve(fromEnv.trim())
+  return resolve('E:/myaicode/knowledge-bases')
+}
+
 /** Schemastery validation for {@link Config}. */
 export const Config: z<Config> = z.object({
-  kbRoot: z.string(),
+  kbRoot: z.string().default(defaultKbRoot()),
 })
 
 /** One `.md` leaf node. */
@@ -294,8 +340,17 @@ export function apply(ctx: any, config: Config): void {
   })
 
   ctx.effect(() => {
+    // The HTTP routes are an optional enhancement: they exist on Web/CLI but
+    // not on the Electron desktop shell, which ships without a `webServer`.
+    // Everything else this plugin contributes (prompt index + kb_* tools) is
+    // unaffected by their absence, so a missing server is a no-op, not a fault.
+    const webServer = resolveWebServer(ctx)
+    if (webServer === undefined || webServer === null) {
+      diag('no webServer on this host; browser routes skipped (kb_* tools still active)')
+      return () => {}
+    }
     try {
-      const disposeTree = ctx.webServer.register({
+      const disposeTree = webServer.register({
         kind: 'exact',
         path: '/gameassist/knowledge/tree',
         handler: (_req: any, res: any): void => {
@@ -313,7 +368,7 @@ export function apply(ctx: any, config: Config): void {
         },
       })
       diag('route registered: /gameassist/knowledge/tree')
-      const disposeNode = ctx.webServer.register({
+      const disposeNode = webServer.register({
         kind: 'exact',
         path: '/gameassist/knowledge/node',
         handler: (req: any, res: any): void => {

@@ -33,7 +33,7 @@ jobs:
           node-version: 22
       - run: corepack enable
       - name: Clone official DSH at the pinned tag
-        run: git clone --depth 1 --branch dsh-v0.1.2-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git dsh
+        run: git clone --depth 1 --branch dsh-v0.2.0-rc.2 https://github.com/deepseek-ai/deepseek-harness.git dsh
       - name: Overlay the five packages
         run: node xia/scripts/integrate.mjs --checkout $GITHUB_WORKSPACE/dsh
       - name: Patch DSH build graph (tsconfig refs/paths + web-app deps)
@@ -47,6 +47,10 @@ jobs:
       - name: Build client lib
         working-directory: dsh
         run: pnpm run build:lib:client
+      - name: Verify both host shapes (desktop has no webServer; empty bundle patch)
+        run: node xia/scripts/verify-desktop-load.mjs --checkout $GITHUB_WORKSPACE/dsh
+      - name: Verify every tarball ships its bundle patch
+        run: node xia/scripts/verify-pack.mjs
       - name: Run focused tests
         working-directory: dsh
         run: pnpm exec vitest run packages/companion/gameassist-knowledge/tests packages/companion/gameassist-memory/tests packages/companion/gameassist-roster/tests packages/client/game-assistant/tests packages/client/gameassist-knowledge/tests

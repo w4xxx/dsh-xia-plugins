@@ -4,9 +4,8 @@
  * this repo are part of the official TypeScript build graph and the Web
  * bundle dependency list.
  *
- * The official DeepSeek Harness tree (pinned tag dsh-v0.1.2-alpha.1) has no
- * `packages/companion` plane, so mounting these packages requires the same
- * wiring the checkout overlay needs:
+ * The official DeepSeek Harness tree has no `packages/companion` plane, so
+ * mounting these packages requires the same wiring the checkout overlay needs:
  *   - tsconfig.host.json:  4 project references (packages/companion/gameassist-*)
  *   - tsconfig.client.json: 2 project references (packages/client/*)
  *   - tsconfig.base.json:  8 explicit path mappings for @w4xxx/dsh-*
@@ -123,9 +122,44 @@ apply(
   'tsconfig.base.json paths (@w4xxx ×7)',
 )
 
+/**
+ * Rewrite legacy `@deepseek-ai/dsh-*` workspace keys to this repo's `@w4xxx`
+ * scope, in place.
+ *
+ * These packages were first overlaid under the official scope, so a checkout
+ * wired before the rename still lists them as `@deepseek-ai/dsh-…`. pnpm then
+ * refuses to install: the workspace dependency names a package that no longer
+ * exists (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`). Renaming the key keeps an
+ * already-wired checkout working; inserting a second entry for the same package
+ * under the new name would leave the broken one behind.
+ * @param file - manifest whose dependency keys are rewritten.
+ * @param names - fully scoped package names that should replace their legacy form.
+ */
+function migrateLegacyNames(file, names) {
+  if (!existsSync(file)) return
+  let text = readFileSync(file, 'utf8')
+  let renamed = 0
+  for (const name of names) {
+    const bare = name.slice(SCOPE.length + 1)
+    const legacy = `"@deepseek-ai/${bare}"`
+    if (!text.includes(legacy)) continue
+    text = text.split(legacy).join(`"${name}"`)
+    renamed += 1
+  }
+  if (renamed === 0) return
+  if (args.dryRun) {
+    console.log(`[dry-run] would rename ${renamed} legacy dependency key(s)`)
+    return
+  }
+  writeFileSync(file, text, 'utf8')
+  console.log(`renamed ${renamed} legacy dependency key(s) to ${SCOPE}`)
+}
+
 // web-app bundle — workspace dependencies
+const webAppManifest = join(checkout, 'packages/bundle/web-app/package.json')
+migrateLegacyNames(webAppManifest, WEB_DEPS)
 apply(
-  join(checkout, 'packages/bundle/web-app/package.json'),
+  webAppManifest,
   '"dependencies": {',
   WEB_DEPS.map((d) => `    ${JSON.stringify(d)}: "workspace:^",`),
   'web-app package.json dependencies (×5)',

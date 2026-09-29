@@ -9,7 +9,8 @@
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -17,6 +18,23 @@ export const name = 'gameassist-memory'
 
 /** The registries this plugin contributes to. */
 export const inject = ['systemPrompt', 'tools']
+
+/**
+ * Default memory-bank location, resolved at load time.
+ *
+ * Kept under the shared Harness home rather than a per-profile directory so one
+ * bank serves the CLI, Web, and desktop hosts at once — and so the plugin still
+ * loads on hosts whose profile patch nobody can hand-edit.
+ * @returns the absolute path of the JSON memory bank.
+ */
+export function defaultMemoryFile(): string {
+  const fromEnv = process.env.DSH_MEMORY_FILE
+  if (fromEnv !== undefined && fromEnv.trim().length > 0) return resolve(fromEnv.trim())
+  const home = process.env.DSH_HOME !== undefined && process.env.DSH_HOME.trim().length > 0
+    ? resolve(process.env.DSH_HOME.trim())
+    : join(homedir(), '.dsh')
+  return join(home, 'gameassist', 'memory.json')
+}
 
 /** Plugin configuration validated by the loader. */
 export interface Config {
@@ -39,7 +57,7 @@ export interface Config {
 
 /** Schemastery validation for {@link Config}. */
 export const Config: z<Config> = z.object({
-  memoryFile: z.string(),
+  memoryFile: z.string().default(defaultMemoryFile()),
   maxNoteChars: z.number().default(200),
   maxSummaryChars: z.number().default(120),
 })

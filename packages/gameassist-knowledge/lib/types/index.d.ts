@@ -12,13 +12,43 @@
 import z from '@deepseek-ai/schemastery';
 /** Cordis plugin name used by loader diagnostics. */
 export declare const name = "gameassist-knowledge";
-/** The registries this plugin contributes to. */
+/**
+ * Resolve an optional `webServer` service from a host context.
+ *
+ * A bare property read is not safe here: cordis wraps every context in a proxy
+ * whose `get` trap THROWS for a service that was never injected (the message is
+ * `cannot get property "webServer" without inject`). The reflection layer's
+ * non-strict lookup is the supported way to ask without demanding it, and it
+ * answers `undefined` when the host has no HTTP layer — which is exactly the
+ * Electron desktop shell.
+ * @param ctx - the plugin context, real or a test double.
+ * @returns the web server service, or undefined when this host has none.
+ */
+export declare function resolveWebServer(ctx: any): any;
+/**
+ * The registries this plugin contributes to.
+ *
+ * `webServer` is deliberately absent: the Electron desktop shell disables its
+ * HTTP layer, so a hard dependency here would stop the whole plugin — and with
+ * it the `kb_*` tools — from loading there. The browser routes are instead
+ * registered opportunistically at runtime (see the route effect below) whenever
+ * a `webServer` happens to be present, which is the case on Web/CLI.
+ */
 export declare const inject: string[];
 /** Plugin configuration validated by the loader. */
 export interface Config {
     /** Absolute path of the knowledge-base root (one subdirectory per library). */
     kbRoot: string;
 }
+/**
+ * Default knowledge-base root, resolved at load time.
+ *
+ * A bundle patch normally carries no `config`, so this default is what makes
+ * the plugin installable on hosts (notably the Electron desktop shell) where
+ * nobody can hand-edit a profile patch. `DSH_KB_ROOT` wins when set, then the
+ * workspace sibling `knowledge-bases` under `$E:/myaicode`-style layouts.
+ */
+export declare function defaultKbRoot(): string;
 /** Schemastery validation for {@link Config}. */
 export declare const Config: z<Config>;
 /** One `.md` leaf node. */
